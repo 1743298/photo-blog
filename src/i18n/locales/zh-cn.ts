@@ -34,7 +34,7 @@ const TEXT = {
     home: '首页',
     feed: '动态',
     grid: '网格',
-    admin: '管理',
+    admin: '៷>ᴗ<៷',
     search: '搜索',
     prev: '上一页',
     prevShort: '上一页',
