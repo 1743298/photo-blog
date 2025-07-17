@@ -1,2 +1,2 @@
 // Dynamically resolves in next.config.ts
-export { enUS as default } from 'date-fns/locale/en-US';
+export { zhCN as default } from 'date-fns/locale/zh-CN';
