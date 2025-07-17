@@ -15,7 +15,7 @@ import AppGrid from '@/components/AppGrid';
 import ImageLarge from '@/components/image/ImageLarge';
 import { clsx } from 'clsx/lite';
 import Link from 'next/link';
-import { pathForFocalLength, pathForPhoto } from '@/app/paths';
+import { pathForFocalLength, pathForPhoto } from '@/app/path';
 import PhotoTags from '@/tag/PhotoTags';
 import ShareButton from '@/share/ShareButton';
 import DownloadButton from '@/components/DownloadButton';
@@ -37,7 +37,7 @@ import { RevalidatePhoto } from './InfinitePhotoScroll';
 import { useCallback, useMemo, useRef } from 'react';
 import useVisible from '@/utility/useVisible';
 import PhotoDate from './PhotoDate';
-import { useAppState } from '@/state/AppState';
+import { useAppState } from '@/app/AppState';
 import { LuExpand } from 'react-icons/lu';
 import LoaderButton from '@/components/primitives/LoaderButton';
 import Tooltip from '@/components/Tooltip';
@@ -59,6 +59,8 @@ export default function PhotoLarge({
   priority,
   prefetch = SHOULD_PREFETCH_ALL_LINKS,
   prefetchRelatedLinks = SHOULD_PREFETCH_ALL_LINKS,
+  recent,
+  year,
   revalidatePhoto,
   showTitle = true,
   showTitleAsH1,
@@ -69,6 +71,8 @@ export default function PhotoLarge({
   showZoomControls: _showZoomControls = true,
   shouldZoomOnFKeydown = true,
   shouldShare = true,
+  shouldShareRecents,
+  shouldShareYear,
   shouldShareCamera,
   shouldShareLens,
   shouldShareTag,
@@ -76,6 +80,7 @@ export default function PhotoLarge({
   shouldShareRecipe,
   shouldShareFocalLength,
   includeFavoriteInAdminMenu,
+  forceFallbackFade,
   onVisible,
   showAdminKeyCommands,
 }: {
@@ -85,6 +90,8 @@ export default function PhotoLarge({
   priority?: boolean
   prefetch?: boolean
   prefetchRelatedLinks?: boolean
+  recent?: boolean
+  year?: string
   revalidatePhoto?: RevalidatePhoto
   showTitle?: boolean
   showTitleAsH1?: boolean
@@ -95,6 +102,8 @@ export default function PhotoLarge({
   showZoomControls?: boolean
   shouldZoomOnFKeydown?: boolean
   shouldShare?: boolean
+  shouldShareRecents?: boolean
+  shouldShareYear?: boolean
   shouldShareCamera?: boolean
   shouldShareLens?: boolean
   shouldShareTag?: boolean
@@ -102,6 +111,7 @@ export default function PhotoLarge({
   shouldShareRecipe?: boolean
   shouldShareFocalLength?: boolean
   includeFavoriteInAdminMenu?: boolean
+  forceFallbackFade?: boolean
   onVisible?: () => void
   showAdminKeyCommands?: boolean
 }) {
@@ -224,6 +234,7 @@ export default function PhotoLarge({
           blurDataURL={photo.blurData}
           blurCompatibilityMode={doesPhotoNeedBlurCompatibility(photo)}
           priority={priority}
+          forceFallbackFade={forceFallbackFade}
         />
       </ZoomControls>
       <div className={clsx(
@@ -288,6 +299,7 @@ export default function PhotoLarge({
           {renderLargePhoto}
         </Link>}
       classNameSide="relative"
+      sideHiddenOnMobile={false}
       contentSide={
         <div className="md:absolute inset-0 -mt-1">
           <MaskedScroll className="sticky top-4 self-start">
@@ -330,7 +342,6 @@ export default function PhotoLarge({
                               lens={lens}
                               contrast="medium"
                               prefetch={prefetchRelatedLinks}
-                              shortText
                               countOnHover={lensCount}
                             />}
                         </div>}
@@ -448,6 +459,12 @@ export default function PhotoLarge({
                       <ShareButton
                         tooltip={appText.tooltip.sharePhoto}
                         photo={photo}
+                        recent={shouldShareRecents
+                          ? recent
+                          : undefined}
+                        year={shouldShareYear
+                          ? year
+                          : undefined}
                         tag={shouldShareTag
                           ? primaryTag
                           : undefined}

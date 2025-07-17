@@ -1,6 +1,7 @@
-import { I18NDeepPartial } from '..';
+import { I18N } from '..';
+export { pt as default } from 'date-fns/locale/pt';
 
-const TEXT: I18NDeepPartial = {
+export const TEXT: I18N = {
   photo: {
     photo: 'Fotografia',
     photoPlural: 'Fotografias',
@@ -18,6 +19,7 @@ const TEXT: I18NDeepPartial = {
     lensPlural: 'Objetivas',
     tag: 'Etiqueta',
     tagPlural: 'Etiquetas',
+    tagged: 'Etiquetado',
     taggedPhotos: 'Fotografias etiquetadas',
     taggedPhrase: 'Fotos etiquetadas com {{tag}}',
     taggedFavs: 'Fotografias favoritas',
@@ -31,10 +33,18 @@ const TEXT: I18NDeepPartial = {
     focalLengthPlural: 'Distâncias focais',
     focalLengthTitle: 'Distância focal {{focal}}',
     focalLengthShare: 'Fotos tiradas em {{focal}}',
+    year: 'Ano',
+    yearPlural: 'Anos',
+    yearShare: 'Fotos de {{year}}',
+    yearTitle: 'Fotos tiradas em {{year}}',
+    recent: 'Recente',
+    recentPlural: 'Recentes',
+    recentTitle: 'Fotos Recentes',
+    recentSubhead: 'Enviado há {{distance}}',
   },
   nav: {
     home: 'Início',
-    feed: 'Feed',
+    full: 'Completo',
     grid: 'Grade',
     admin: 'Menu de administração',
     search: 'Pesquisar',
@@ -42,6 +52,10 @@ const TEXT: I18NDeepPartial = {
     prevShort: 'Ant',
     next: 'Próximo',
     nextShort: 'Próx',
+  },
+  sort: {
+    newest: 'Ver mais recentes',
+    oldest: 'Ver mais antigas',
   },
   cmdk: {
     placeholder: 'Pesquisar fotografias, visualizações, configurações ...',
@@ -89,8 +103,8 @@ const TEXT: I18NDeepPartial = {
     edit: 'Editar',
     favorite: 'Favoritar',
     unfavorite: 'Remover dos favoritos',
-    hide: 'Ocultar',
-    unhide: 'Mostrar',
+    private: 'Tornar Privado',
+    public: 'Tornar Público',
     download: 'Descarregar',
     sync: 'Sincronizar',
     delete: 'Excluir',
@@ -116,5 +130,3 @@ const TEXT: I18NDeepPartial = {
     paginateAction: '{{action}} {{index}} de {{count}}',
   },
 };
-
-export default TEXT;

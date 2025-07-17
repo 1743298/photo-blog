@@ -1,4 +1,6 @@
-const TEXT = {
+export { enUS as default } from 'date-fns/locale/en-US';
+
+export const TEXT = {
   photo: {
     photo: 'Photo',
     photoPlural: 'Photos',
@@ -16,6 +18,7 @@ const TEXT = {
     lensPlural: 'Lenses',
     tag: 'Tag',
     tagPlural: 'Tags',
+    tagged: 'Tagged',
     taggedPhotos: 'Tagged Photos',
     taggedPhrase: 'Photos tagged {{tag}}',
     taggedFavs: 'Favorite Photos',
@@ -29,10 +32,18 @@ const TEXT = {
     focalLengthPlural: 'Focal Lengths',
     focalLengthTitle: 'Focal Length {{focal}}',
     focalLengthShare: 'Photos shot at {{focal}}',
+    year: 'Year',
+    yearPlural: 'Years',
+    yearShare: '{{year}} photos',
+    yearTitle: 'Photos taken in {{year}}',
+    recent: 'Recent',
+    recentPlural: 'Recents',
+    recentTitle: 'Recent Photos',
+    recentSubhead: 'Uploaded {{distance}} ago',
   },
   nav: {
     home: 'Home',
-    feed: 'Feed',
+    full: 'Full',
     grid: 'Grid',
     admin: 'Admin',
     search: 'Search',
@@ -40,6 +51,10 @@ const TEXT = {
     prevShort: 'Prev',
     next: 'Next',
     nextShort: 'Next',
+  },
+  sort: {
+    newest: 'View newest',
+    oldest: 'View oldest',
   },
   cmdk: {
     placeholder: 'Search photos, views, settings ...',
@@ -87,8 +102,8 @@ const TEXT = {
     edit: 'Edit',
     favorite: 'Favorite',
     unfavorite: 'Unfavorite',
-    hide: 'Hide',
-    unhide: 'Unhide',
+    private: 'Make Private',
+    public: 'Make Public',
     download: 'Download',
     sync: 'Sync',
     delete: 'Delete',
@@ -114,5 +129,3 @@ const TEXT = {
     paginateAction: '{{action}} {{index}} of {{count}}',
   },
 };
-
-export default TEXT;

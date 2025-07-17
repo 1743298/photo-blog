@@ -4,13 +4,13 @@ import {
   IS_SITE_READY,
   PRESERVE_ORIGINAL_UPLOADS,
 } from '@/app/config';
-import AdminAppConfiguration from '@/admin/AdminAppConfiguration';
+import AdminAppConfiguration from '@/admin/config/AdminAppConfiguration';
 import { clsx } from 'clsx/lite';
 import { HiOutlinePhotograph } from 'react-icons/hi';
 import { revalidatePath } from 'next/cache';
 import SignInOrUploadClient from '@/admin/SignInOrUploadClient';
 import Link from 'next/link';
-import { PATH_ADMIN_CONFIGURATION } from '@/app/paths';
+import { PATH_ADMIN_CONFIGURATION } from '@/app/path';
 import AnimateItems from '@/components/AnimateItems';
 import { getAppText } from '@/i18n/state/server';
 

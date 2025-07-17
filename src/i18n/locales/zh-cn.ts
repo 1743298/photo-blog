@@ -1,4 +1,7 @@
-const TEXT = {
+import { I18N } from '..';
+export { zhCN as default } from 'date-fns/locale/zh-CN';
+
+export const TEXT: I18N = {
   photo: {
     photo: '照片',
     photoPlural: '照片',
@@ -16,6 +19,7 @@ const TEXT = {
     lensPlural: '镜头',
     tag: '标签',
     tagPlural: '标签',
+    tagged: '已标记',
     taggedPhotos: '已标记照片',
     taggedPhrase: '标记为 {{tag}} 的照片',
     taggedFavs: '收藏照片',
@@ -29,10 +33,18 @@ const TEXT = {
     focalLengthPlural: '焦距',
     focalLengthTitle: '焦距 {{focal}}',
     focalLengthShare: '焦距 {{focal}} 拍摄的照片',
+    year: '年份',
+    yearPlural: '年份',
+    yearShare: '{{year}} 照片',
+    yearTitle: '{{year}} 年拍摄的照片',
+    recent: '最近',
+    recentPlural: '最近',
+    recentTitle: '最近的照片',
+    recentSubhead: '{{distance}} 前上传',
   },
   nav: {
     home: '首页',
-    feed: '动态',
+    full: '完整',
     grid: '网格',
     admin: '៷>ᴗ<៷',
     search: '搜索',
@@ -40,6 +52,10 @@ const TEXT = {
     prevShort: '上一页',
     next: '下一页',
     nextShort: '下一页',
+  },
+  sort: {
+    newest: '查看最新',
+    oldest: '查看最旧',
   },
   cmdk: {
     placeholder: '搜索照片、视图、设置...',
@@ -87,8 +103,8 @@ const TEXT = {
     edit: '编辑',
     favorite: '收藏',
     unfavorite: '取消收藏',
-    hide: '隐藏',
-    unhide: '取消隐藏',
+    private: '设为私密',
+    public: '设为公开',
     download: '下载',
     sync: '同步',
     delete: '删除',
@@ -113,5 +129,3 @@ const TEXT = {
     paginateAction: '{{action}} 第 {{index}} 页，共 {{count}} 页',
   },
 };
-
-export default TEXT;

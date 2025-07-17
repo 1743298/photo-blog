@@ -1,6 +1,7 @@
-import { I18NDeepPartial } from '..';
+import { I18N } from '..';
+export { id as default } from 'date-fns/locale/id';
 
-const TEXT: I18NDeepPartial = {
+export const TEXT: I18N = {
   photo: {
     photo: 'Foto',
     photoPlural: 'Foto',
@@ -18,6 +19,7 @@ const TEXT: I18NDeepPartial = {
     lensPlural: 'Lensa',
     tag: 'Tag',
     tagPlural: 'Tag',
+    tagged: 'Ditandai',
     taggedPhotos: 'Foto yang Ditandai',
     taggedPhrase: 'Foto dengan tag {{tag}}',
     taggedFavs: 'Foto Favorit',
@@ -31,10 +33,18 @@ const TEXT: I18NDeepPartial = {
     focalLengthPlural: 'Panjang Fokus',
     focalLengthTitle: 'Panjang Fokus {{focal}}',
     focalLengthShare: 'Foto diambil pada {{focal}}',
+    year: 'Tahun',
+    yearPlural: 'Tahun',
+    yearShare: 'Foto {{year}}',
+    yearTitle: 'Foto diambil pada tahun {{year}}',
+    recent: 'Terbaru',
+    recentPlural: 'Terbaru',
+    recentTitle: 'Foto Terbaru',
+    recentSubhead: 'Diunggah {{distance}} yang lalu',
   },
   nav: {
     home: 'Beranda',
-    feed: 'Umpan',
+    full: 'Lengkap',
     grid: 'Grid',
     admin: 'Admin',
     search: 'Cari',
@@ -42,6 +52,10 @@ const TEXT: I18NDeepPartial = {
     prevShort: 'Sblm',
     next: 'Berikutnya',
     nextShort: 'Brkt',
+  },
+  sort: {
+    newest: 'Lihat terbaru',
+    oldest: 'Lihat terlama',
   },
   cmdk: {
     placeholder: 'Cari foto, tampilan, pengaturan ...',
@@ -89,8 +103,8 @@ const TEXT: I18NDeepPartial = {
     edit: 'Edit',
     favorite: 'Favorit',
     unfavorite: 'Hapus dari Favorit',
-    hide: 'Sembunyikan',
-    unhide: 'Tampilkan',
+    private: 'Buat Privat',
+    public: 'Buat Publik',
     download: 'Unduh',
     sync: 'Sinkronkan',
     delete: 'Hapus',
@@ -115,5 +129,3 @@ const TEXT: I18NDeepPartial = {
     paginateAction: '{{action}} {{index}} dari {{count}}',
   },
 };
-
-export default TEXT;
