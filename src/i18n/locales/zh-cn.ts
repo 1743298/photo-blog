@@ -46,7 +46,7 @@ export const TEXT: I18N = {
     home: '首页',
     full: '完整',
     grid: '网格',
-    admin: '管理',
+    admin: '៷>ᴗ<៷',
     search: '搜索',
     prev: '上一页',
     prevShort: '上一页',
