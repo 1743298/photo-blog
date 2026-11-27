@@ -51,7 +51,7 @@ export const TEXT: I18N = {
     grid: '网格',
     viewOptions: '视图选项',
     library: '图库',
-    admin: '管理',
+    admin: '៷>ᴗ<៷',
     search: '搜索',
     prev: '上一页',
     prevShort: '上一页',
