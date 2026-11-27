@@ -8,10 +8,8 @@ import { useAppText } from '@/i18n/state/client';
 
 export default function SignInOrUploadClient({
   shouldResize,
-  onLastUpload,
 }: {
   shouldResize: boolean
-  onLastUpload: () => Promise<void>
 }) {
   const { isUserSignedIn, isCheckingAuth } = useAppState();
 
@@ -24,7 +22,7 @@ export default function SignInOrUploadClient({
     )}>
       <div>
         {isCheckingAuth
-          ? appText.misc.loading
+          ? appText.utility.loading
           : isUserSignedIn
             ? appText.onboarding.setupFirstPhoto
             : appText.onboarding.setupSignIn}
@@ -41,7 +39,6 @@ export default function SignInOrUploadClient({
         <PhotoUploadWithStatus
           inputId="admin-cta"
           shouldResize={shouldResize}
-          onLastUpload={onLastUpload}
           showStatusText={false}
         />}
     </div>

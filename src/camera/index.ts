@@ -1,8 +1,14 @@
 import { CategoryQueryMeta } from '@/category';
 import type { Photo } from '@/photo';
+import type { AnnotatedTag } from '@/photo/form';
 import { isCameraMakeApple } from '@/platforms/apple';
 import { formatSonyModel, isMakeSony } from '@/platforms/sony';
-import { parameterize } from '@/utility/string';
+import {
+  MakeModelTextLength,
+  formatCount,
+  formatCountDescriptive,
+  parameterize,
+} from '@/utility/string';
 
 const CAMERA_PLACEHOLDER: Camera = { make: 'Camera', model: 'Model' };
 
@@ -60,11 +66,7 @@ export const cameraFromPhoto = (
 
 export const formatCameraText = (
   { make, model: _model }: Camera,
-  length:
-    'long' |    // Unmodified make and model
-    'medium' |  // Make and model, with modifiers removed
-    'short'     // Model only
-  = 'medium',
+  length: MakeModelTextLength = 'medium',
 ) => {
   // Capture simple make without modifiers like 'Corporation' or 'Company'
   const makeSimple = make.match(/^(\S+)/)?.[1];
@@ -74,22 +76,48 @@ export const formatCameraText = (
     model.toLocaleLowerCase().startsWith(makeSimple.toLocaleLowerCase())
   );
   switch (length) {
-  case 'long':
-    return `${make} ${model}`;
-  case 'medium':
-    return doesModelStartWithMake || isCameraMakeApple(make)
-      ? model
-      : `${make} ${model}`;
-  case 'short':
-    model = doesModelStartWithMake
-      ? model.replace(makeSimple, '').trim()
-      : model;
-    if (
-      model.includes('iPhone') &&
+    case 'long':
+      return `${make} ${model}`;
+    case 'medium':
+      return doesModelStartWithMake || isCameraMakeApple(make)
+        ? model
+        : `${make} ${model}`;
+    case 'short':
+      model = doesModelStartWithMake
+        ? model.replace(makeSimple, '').trim()
+        : model;
+      if (
+        model.includes('iPhone') &&
       model.length > 9
-    ) {
-      model = model.replace(/iPhone\s*/i, '');
-    }
-    return model;
+      ) {
+        model = model.replace(/iPhone\s*/i, '');
+      }
+      return model;
   }
 };
+
+const convertCameraFieldForForm = (
+  cameras: Cameras = [],
+  getValue: (camera: Camera) => string | undefined,
+): AnnotatedTag[] => {
+  const counts = new Map<string, number>();
+  cameras.forEach(({ camera, count }) => {
+    const value = getValue(camera);
+    if (value) {
+      counts.set(value, (counts.get(value) ?? 0) + count);
+    }
+  });
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({
+      value,
+      annotation: formatCount(count),
+      annotationAria: formatCountDescriptive(count),
+    }))
+    .sort((a, b) => a.value.localeCompare(b.value));
+};
+
+export const convertCameraMakesForForm = (cameras: Cameras = []) =>
+  convertCameraFieldForForm(cameras, ({ make }) => make);
+
+export const convertCameraModelsForForm = (cameras: Cameras = []) =>
+  convertCameraFieldForForm(cameras, ({ model }) => model);

@@ -18,28 +18,23 @@ import PhotoPrivate from '@/tag/PhotoPrivate';
 import {
   CATEGORY_VISIBILITY,
   HIDE_TAGS_WITH_ONE_PHOTO,
-  SHOW_CATEGORY_IMAGE_HOVERS,
 } from '@/app/config';
 import { clsx } from 'clsx/lite';
 import PhotoRecipe from '@/recipe/PhotoRecipe';
-import IconCamera from '@/components/icons/IconCamera';
-import IconRecipe from '@/components/icons/IconRecipe';
-import IconTag from '@/components/icons/IconTag';
-import IconFilm from '@/components/icons/IconFilm';
-import IconLens from '@/components/icons/IconLens';
-import PhotoLens from '@/lens/PhotoLens';
-import IconFocalLength from '@/components/icons/IconFocalLength';
 import {
   getCategoriesWithItemsCount,
+  getCategoryTitle,
   PhotoSetCategories,
 } from '@/category';
+import CategoryIcon from '@/category/CategoryIcon';
 import PhotoFocalLength from '@/focal/PhotoFocalLength';
+import PhotoLens from '@/lens/PhotoLens';
 import useElementHeight from '@/utility/useElementHeight';
 import { useAppText } from '@/i18n/state/client';
-import IconYear from '@/components/icons/IconYear';
-import PhotoYear from '@/years/PhotoYear';
+import PhotoYear from '@/year/PhotoYear';
 import { chunkArray } from '@/utility/array';
 import PhotoRecents from '@/recents/PhotoRecents';
+import PhotoAlbum from '@/album/PhotoAlbum';
 
 const APPROXIMATE_ITEM_HEIGHT = 40;
 const ABOUT_HEIGHT_OFFSET = 24;
@@ -49,26 +44,29 @@ export default function PhotoGridSidebar({
   containerHeight,
   aboutTextSafelyParsedHtml,
   aboutTextHasBrParagraphBreaks,
+  className,
   ..._categories
 }: PhotoSetCategories & {
   photosCount: number
   containerHeight?: number
   aboutTextSafelyParsedHtml?: string
   aboutTextHasBrParagraphBreaks?: boolean
+  className?: string
 }) {
-  const categories = useMemo(() => HIDE_TAGS_WITH_ONE_PHOTO
-    ? {
-      ..._categories,
+  const categories = useMemo(() => ({
+    ..._categories,
+    albums: _categories.albums.filter(({ count }) => count > 0),
+    ...HIDE_TAGS_WITH_ONE_PHOTO && {
       tags: limitTagsByCount(_categories.tags, 2),
-    }
-    : _categories
-  , [_categories]);
+    },
+  }), [_categories]);
 
   const {
     recents,
     years,
     cameras,
     lenses,
+    albums,
     tags,
     films,
     recipes,
@@ -109,7 +107,7 @@ export default function PhotoGridSidebar({
       key="recents"
       items={[<PhotoRecents
         key="recents"
-        countOnHover={recents[0]?.count}
+        hoverCount={recents[0]?.count}
         type="text-only"
         prefetch={false}
         contrast="low"
@@ -121,22 +119,20 @@ export default function PhotoGridSidebar({
   const yearsContent = years.length > 0
     ? <HeaderList
       key="years"
-      title="Years"
-      icon={<IconYear
-        size={14}
-        className="translate-x-[0.5px]"
-      />}
+      title={getCategoryTitle('years', appText)}
+      icon={<CategoryIcon category="years" />}
       maxItems={maxItemsPerCategory}
       items={yearRows.map((row, index) =>
-        <div key={index} className="flex gap-1">
+        <div key={index} className="flex gap-[5px]">
           {row.map(({ year, count }) =>
             <PhotoYear
               key={year}
               year={year}
-              countOnHover={SHOW_CATEGORY_IMAGE_HOVERS ? count : undefined}
+              hoverCount={count}
               type="text-only"
               prefetch={false}
               contrast="low"
+              hoverType="image"
               suppressSpinner
               badged
             />)}
@@ -147,11 +143,8 @@ export default function PhotoGridSidebar({
   const camerasContent = cameras.length > 0
     ? <HeaderList
       key="cameras"
-      title={appText.category.cameraPlural}
-      icon={<IconCamera
-        size={15}
-        className="translate-x-[0.5px]"
-      />}
+      title={getCategoryTitle('cameras', appText)}
+      icon={<CategoryIcon category="cameras" />}
       maxItems={maxItemsPerCategory}
       items={cameras
         .map(({ cameraKey, camera, count }) =>
@@ -159,7 +152,7 @@ export default function PhotoGridSidebar({
             key={cameraKey}
             camera={camera}
             type="text-only"
-            countOnHover={count}
+            hoverCount={count}
             prefetch={false}
             contrast="low"
             badged
@@ -170,8 +163,8 @@ export default function PhotoGridSidebar({
   const lensesContent = lenses.length > 0
     ? <HeaderList
       key="lenses"
-      title={appText.category.lensPlural}
-      icon={<IconLens size={15} />}
+      title={getCategoryTitle('lenses', appText)}
+      icon={<CategoryIcon category="lenses" />}
       maxItems={maxItemsPerCategory}
       items={lenses
         .map(({ lensKey, lens, count }) =>
@@ -179,7 +172,7 @@ export default function PhotoGridSidebar({
             key={lensKey}
             lens={lens}
             type="text-only"
-            countOnHover={count}
+            hoverCount={count}
             prefetch={false}
             contrast="low"
             badged
@@ -187,46 +180,64 @@ export default function PhotoGridSidebar({
     />
     : null;
 
+  const albumsContent = albums.length > 0
+    ? <HeaderList
+      key="albums"
+      title={getCategoryTitle('albums', appText)}
+      icon={<CategoryIcon category="albums" />}
+      maxItems={maxItemsPerCategory}
+      items={albums
+        .map(({ album, count }) =>
+          <div key={album.slug} className="flex gap-1">
+            <PhotoAlbum
+              key={album.slug}
+              album={album}
+              type="text-only"
+              prefetch={false}
+              contrast="low"
+              hoverCount={count}
+              badged
+            />
+          </div>)}
+    />
+    : null;
+
   const tagsContent = tags.length > 0
     ? <HeaderList
       key="tags"
-      title={appText.category.tagPlural}
-      icon={<IconTag
-        size={14}
-        className="translate-x-[1px] translate-y-[1px]"
-      />}
+      title={getCategoryTitle('tags', appText)}
+      icon={<CategoryIcon category="tags" />}
       maxItems={maxItemsPerCategory}
       items={tagsIncludingHidden
         .map(({ tag, count }) => {
           switch (tag) {
-          case TAG_FAVS:
-            return <PhotoFavs
-              key={TAG_FAVS}
-              countOnHover={count}
-              type="icon-last"
-              prefetch={false}
-              contrast="low"
-              badged
-            />;
-          case TAG_PRIVATE:
-            return <PhotoPrivate
-              key={TAG_PRIVATE}
-              countOnHover={count}
-              type="icon-last"
-              prefetch={false}
-              contrast="low"
-              badged
-            />;
-          default:
-            return <PhotoTag
-              key={tag}
-              tag={tag}
-              type="text-only"
-              countOnHover={count}
-              prefetch={false}
-              contrast="low"
-              badged
-            />;
+            case TAG_FAVS:
+              return <PhotoFavs
+                key={TAG_FAVS}
+                hoverCount={count}
+                type="icon-last"
+                prefetch={false}
+                contrast="low"
+                badged
+              />;
+            case TAG_PRIVATE:
+              return <PhotoPrivate
+                key={TAG_PRIVATE}
+                type="icon-last"
+                prefetch={false}
+                contrast="low"
+                badged
+              />;
+            default:
+              return <PhotoTag
+                key={tag}
+                tag={tag}
+                hoverCount={count}
+                type="text-only"
+                prefetch={false}
+                contrast="low"
+                badged
+              />;
           }
         })}
     />
@@ -235,11 +246,8 @@ export default function PhotoGridSidebar({
   const recipesContent = recipes.length > 0
     ? <HeaderList
       key="recipes"
-      title={appText.category.recipePlural}
-      icon={<IconRecipe
-        size={16}
-        className="translate-x-[-1px]"
-      />}
+      title={getCategoryTitle('recipes', appText)}
+      icon={<CategoryIcon category="recipes" />}
       maxItems={maxItemsPerCategory}
       items={recipes
         .map(({ recipe, count }) =>
@@ -247,7 +255,7 @@ export default function PhotoGridSidebar({
             key={recipe}
             recipe={recipe}
             type="text-only"
-            countOnHover={count}
+            hoverCount={count}
             prefetch={false}
             contrast="low"
             badged
@@ -258,15 +266,15 @@ export default function PhotoGridSidebar({
   const filmsContent = films.length > 0
     ? <HeaderList
       key="films"
-      title={appText.category.filmPlural}
-      icon={<IconFilm size={15} />}
+      title={getCategoryTitle('films', appText)}
+      icon={<CategoryIcon category="films" />}
       maxItems={maxItemsPerCategory}
       items={films
         .map(({ film, count }) =>
           <PhotoFilm
             key={film}
             film={film}
-            countOnHover={count}
+            hoverCount={count}
             type="text-only"
             prefetch={false}
           />)}
@@ -276,14 +284,14 @@ export default function PhotoGridSidebar({
   const focalLengthsContent = focalLengths.length > 0
     ? <HeaderList
       key="focal-lengths"
-      title={appText.category.focalLengthPlural}
-      icon={<IconFocalLength size={13} />}
+      title={getCategoryTitle('focal-lengths', appText)}
+      icon={<CategoryIcon category="focal-lengths" />}
       maxItems={maxItemsPerCategory}
       items={focalLengths.map(({ focal, count }) =>
         <PhotoFocalLength
           key={focal}
           focal={focal}
-          countOnHover={count}
+          hoverCount={count}
           type="text-only"
           prefetch={false}
           badged
@@ -299,13 +307,13 @@ export default function PhotoGridSidebar({
     : null;
 
   return (
-    <div className="space-y-4">
+    <div className={clsx('space-y-4', className)}>
       {aboutTextSafelyParsedHtml && <HeaderList
         items={[<p
           key="about"
           ref={aboutRef}
           className={clsx(
-            'max-w-60 normal-case text-dim',
+            'max-w-60 normal-case text-dim [&>a]:underline',
             aboutTextHasBrParagraphBreaks && 'pb-2',
           )}
           dangerouslySetInnerHTML={{
@@ -315,14 +323,15 @@ export default function PhotoGridSidebar({
       />}
       {CATEGORY_VISIBILITY.map(category => {
         switch (category) {
-        case 'recents': return recentsContent;
-        case 'years': return yearsContent;
-        case 'cameras': return camerasContent;
-        case 'lenses': return lensesContent;
-        case 'tags': return tagsContent;
-        case 'recipes': return recipesContent;
-        case 'films': return filmsContent;
-        case 'focal-lengths': return focalLengthsContent;
+          case 'recents': return recentsContent;
+          case 'years': return yearsContent;
+          case 'cameras': return camerasContent;
+          case 'lenses': return lensesContent;
+          case 'albums': return albumsContent;
+          case 'tags': return tagsContent;
+          case 'recipes': return recipesContent;
+          case 'films': return filmsContent;
+          case 'focal-lengths': return focalLengthsContent;
         }
       })}
       {photoStatsContent}

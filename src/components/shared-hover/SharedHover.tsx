@@ -1,11 +1,15 @@
+'use client';
+
 import { ReactNode, useRef, useEffect } from 'react';
 import { SharedHoverProps, useSharedHoverState } from '../shared-hover/state';
-import useSupportsHover from '@/utility/useSupportsHover';
+import clsx from 'clsx/lite';
+import { useAppState } from '@/app/AppState';
 
 export default function SharedHover({
   hoverKey: key,
   children,
   content,
+  className,
   width,
   height,
   offsetAbove = -1,
@@ -15,6 +19,7 @@ export default function SharedHover({
   hoverKey: string
   children :ReactNode
   content: ReactNode
+  className?: string
   width: number
   height: number
   offsetAbove?: number
@@ -22,6 +27,8 @@ export default function SharedHover({
   color?: SharedHoverProps['color']
 }) {
   const ref = useRef<HTMLDivElement>(null);
+
+  const { supportsHover } = useAppState();
 
   const {
     showHover,
@@ -32,8 +39,6 @@ export default function SharedHover({
 
   const isHovering = isHoverBeingShown?.(key);
 
-  const supportsHover = useSupportsHover();
-
   useEffect(() => {
     const trigger = ref.current;
     return () => dismissHover?.(trigger);
@@ -41,17 +46,18 @@ export default function SharedHover({
 
   useEffect(() => {
     if (isHovering) {
-      renderHover?.(content);
+      renderHover?.(key, content);
     }
-  }, [isHovering, renderHover, content]);
+  }, [isHovering, renderHover, key, content]);
 
   return (
     <div
-      className="max-w-full"
+      className={clsx('max-w-full', className)}
       ref={ref}
       onMouseEnter={() => supportsHover &&
         showHover?.(ref.current, {
           key,
+          content,
           width,
           height,
           offsetAbove,

@@ -1,18 +1,18 @@
 import { getPhotosCached } from '@/photo/cache';
 import {
   IMAGE_OG_DIMENSION_SMALL,
-  MAX_PHOTOS_TO_SHOW_PER_CATEGORY,
+  PHOTO_PREVIEW_QUERY_OPTIONS,
 } from '@/image-response';
 import { getIBMPlexMono } from '@/app/font';
 import { ImageResponse } from 'next/og';
 import { getImageResponseCacheControlHeaders } from '@/image-response/cache';
-import { getUniqueLenses } from '@/photo/db/query';
+import { getUniqueLenses } from '@/photo/query';
 import {
   getLensFromParams,
   LensProps,
   safelyGenerateLensStaticParams,
 } from '@/lens';
-import LensImageResponse from '@/image-response/LensImageResponse';
+import LensImageResponse from '@/lens/LensImageResponse';
 import { staticallyGenerateCategoryIfConfigured } from '@/app/static';
 
 export const generateStaticParams = staticallyGenerateCategoryIfConfigured(
@@ -34,7 +34,7 @@ export async function GET(
     headers,
   ] = await Promise.all([
     getPhotosCached({
-      limit: MAX_PHOTOS_TO_SHOW_PER_CATEGORY,
+      ...PHOTO_PREVIEW_QUERY_OPTIONS,
       lens: lens,
     }),
     getIBMPlexMono(),

@@ -1,12 +1,11 @@
 import { getStoragePhotoUrlsNoStore } from '@/platforms/storage/cache';
-import { getPhotos, getPhotosInNeedOfSyncCount } from '@/photo/db/query';
+import { getPhotos, getPhotosInNeedOfUpdateCount } from '@/photo/query';
 import { getPhotosMetaCached } from '@/photo/cache';
 import AdminPhotosClient from '@/admin/AdminPhotosClient';
-import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { TIMEZONE_COOKIE_NAME } from '@/utility/timezone';
 import {
-  AI_TEXT_GENERATION_ENABLED,
+  AI_CONTENT_GENERATION_ENABLED,
   PRESERVE_ORIGINAL_UPLOADS,
 } from '@/app/config';
 
@@ -34,7 +33,7 @@ export default async function AdminPhotosPage() {
     getPhotosMetaCached({ hidden: 'include'})
       .then(({ count }) => count)
       .catch(() => 0),
-    getPhotosInNeedOfSyncCount()
+    getPhotosInNeedOfUpdateCount()
       .catch(() => 0),
     DEBUG_PHOTO_BLOBS
       ? getStoragePhotoUrlsNoStore()
@@ -47,12 +46,7 @@ export default async function AdminPhotosPage() {
       photosCount,
       photosCountNeedsSync,
       shouldResize: !PRESERVE_ORIGINAL_UPLOADS,
-      hasAiTextGeneration: AI_TEXT_GENERATION_ENABLED,
-      onLastUpload: async () => {
-        'use server';
-        // Update upload count in admin nav
-        revalidatePath('/admin', 'layout');
-      },
+      hasAiContentGeneration: AI_CONTENT_GENERATION_ENABLED,
       blobPhotoUrls,
       infiniteScrollInitial: INFINITE_SCROLL_INITIAL_ADMIN_PHOTOS,
       infiniteScrollMultiple: INFINITE_SCROLL_MULTIPLE_ADMIN_PHOTOS,

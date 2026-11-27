@@ -19,6 +19,7 @@ export default function FieldsetWithStatus({
   icon,
   note,
   noteShort,
+  noteComplex,
   tooltip,
   error,
   value,
@@ -27,19 +28,29 @@ export default function FieldsetWithStatus({
   className,
   selectOptions,
   selectOptionsDefaultLabel,
+  selectOpenOnLoad,
   tagOptions,
   tagOptionsLimit,
   tagOptionsLimitValidationMessage,
+  tagOptionsShouldParameterize,
+  tagOptionsShouldRevealRawText,
   tagOptionsDefaultIcon,
+  tagOptionsDefaultIconSelected,
+  tagOptionsLabelOverride,
+  tagOptionsAllowNewValues,
+  tagOptionsAccessory,
+  tagOptionsOnInputTextChange,
   placeholder,
   loading,
   required,
-  readOnly,
+  readOnly: readOnlyProp,
   spellCheck,
   capitalize,
   type = 'text',
   inputRef: inputRefProp,
   accessory,
+  labelAccessory,
+  footer,
   hideLabel,
   tabIndex,
 }: {
@@ -48,6 +59,7 @@ export default function FieldsetWithStatus({
   icon?: ReactNode
   note?: string
   noteShort?: string
+  noteComplex?: ReactNode
   tooltip?: string
   error?: string
   value: string
@@ -56,10 +68,18 @@ export default function FieldsetWithStatus({
   className?: string
   selectOptions?: SelectMenuOptionType[]
   selectOptionsDefaultLabel?: string
+  selectOpenOnLoad?: boolean
   tagOptions?: AnnotatedTag[]
   tagOptionsLimit?: number
   tagOptionsLimitValidationMessage?: string
+  tagOptionsShouldParameterize?: boolean
+  tagOptionsShouldRevealRawText?: boolean
   tagOptionsDefaultIcon?: ReactNode
+  tagOptionsDefaultIconSelected?: ReactNode
+  tagOptionsLabelOverride?: (value: string) => string | undefined
+  tagOptionsAllowNewValues?: boolean
+  tagOptionsAccessory?: ReactNode
+  tagOptionsOnInputTextChange?: (value: string) => void
   placeholder?: string
   loading?: boolean
   required?: boolean
@@ -68,7 +88,9 @@ export default function FieldsetWithStatus({
   capitalize?: boolean
   type?: FieldSetType
   inputRef?: RefObject<HTMLInputElement | null>
-  accessory?: React.ReactNode
+  accessory?: ReactNode
+  labelAccessory?: ReactNode
+  footer?: ReactNode
   hideLabel?: boolean
   tabIndex?: number
 }) {
@@ -79,6 +101,10 @@ export default function FieldsetWithStatus({
   const id = _id || parameterize(label);
 
   const { pending } = useFormStatus();
+
+  const readOnly = readOnlyProp || pending || loading;
+
+  const errorId = error ? `${id}-error` : undefined;
 
   const inputProps: InputHTMLAttributes<HTMLInputElement> = {
     id,
@@ -95,10 +121,14 @@ export default function FieldsetWithStatus({
     spellCheck,
     autoComplete: 'off',
     autoCapitalize: !capitalize ? 'off' : undefined,
-    readOnly: readOnly || pending || loading,
+    readOnly,
     disabled: type === 'checkbox' && (
       readOnly || pending || loading
     ),
+    required,
+    'aria-required': required,
+    'aria-invalid': Boolean(error),
+    'aria-describedby': errorId,
     className: clsx(
       (
         type === 'text' ||
@@ -120,17 +150,27 @@ export default function FieldsetWithStatus({
         // For managing checkbox active state
         'group',
         'space-y-1',
-        type === 'checkbox' && 'flex items-center gap-2',
+        type === 'checkbox' && clsx(
+          'flex items-center gap-2',
+          !readOnly && 'cursor-pointer',
+        ),
         className,
       )}>
-        {!hideLabel &&
+        {!hideLabel && <div className={clsx(
+          labelAccessory
+            ? 'flex flex-wrap items-center gap-x-3'
+            : 'contents',
+        )}>
           <label
             htmlFor={id}
             className={clsx(
               'inline-flex flex-wrap gap-x-2 items-center select-none',
-              type === 'checkbox' && 'order-2 m-0 translate-y-[0.25px]',
-              type === 'checkbox' && readOnly &&
-                'opacity-50 cursor-not-allowed',
+              type === 'checkbox' && clsx(
+                'order-2 m-0 translate-y-[0.25px]',
+                readOnly
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'cursor-pointer',
+              ),
             )}
           >
             <span className="inline-flex items-center gap-x-[5px]">
@@ -153,19 +193,20 @@ export default function FieldsetWithStatus({
             {note && !error &&
               <ResponsiveText
                 className="text-gray-400 dark:text-gray-600"
-                shortText={`(${noteShort})`}
+                shortText={`(${noteShort ?? note})`}
               >
                 ({note})
               </ResponsiveText>}
+            {noteComplex}
             {isModified && !error &&
               <span className={clsx(
                 'text-main font-medium text-[0.9rem]',
-                ' -ml-1.5 translate-y-[-1px]',
+                ' -ml-1.5 translate-y-[-1px] -z-1',
               )}>
                 *
               </span>}
             {error &&
-              <span className="text-error">
+              <span id={errorId} className="text-error">
                 {error}
               </span>}
             {required &&
@@ -176,20 +217,23 @@ export default function FieldsetWithStatus({
               <span className="translate-y-[1.5px]">
                 <Spinner />
               </span>}
-          </label>}
+          </label>
+          {labelAccessory}
+        </div>}
         <div className="flex gap-2">
           {selectOptions
             ? <SelectMenu
               id={id}
               name={id}
               tabIndex={tabIndex}
-              className="w-full"
+              className="w-full min-w-0"
               value={value}
               onChange={onChange}
               options={selectOptions}
               defaultOptionLabel={selectOptionsDefaultLabel}
+              openOnLoad={selectOpenOnLoad}
               error={error}
-              readOnly={readOnly || pending || loading}
+              readOnly={readOnly}
             />
             : tagOptions
               ? <TagInput
@@ -197,14 +241,20 @@ export default function FieldsetWithStatus({
                 name={id}
                 value={value}
                 options={tagOptions}
+                labelForValueOverride={tagOptionsLabelOverride}
                 defaultIcon={tagOptionsDefaultIcon}
+                defaultIconSelected={tagOptionsDefaultIconSelected}
+                accessory={tagOptionsAccessory}
                 onChange={onChange}
-                showMenuOnDelete={tagOptionsLimit === 1}
+                onInputTextChange={tagOptionsOnInputTextChange}
                 className={clsx(Boolean(error) && 'error')}
-                readOnly={readOnly || pending || loading}
+                readOnly={readOnly}
                 placeholder={placeholder}
                 limit={tagOptionsLimit}
                 limitValidationMessage={tagOptionsLimitValidationMessage}
+                allowNewValues={tagOptionsAllowNewValues}
+                shouldParameterize={tagOptionsShouldParameterize}
+                shouldRevealRawText={tagOptionsShouldRevealRawText}
               />
               : type === 'textarea'
                 ? <textarea
@@ -213,9 +263,13 @@ export default function FieldsetWithStatus({
                   value={value}
                   placeholder={placeholder}
                   onChange={e => onChange?.(e.target.value)}
-                  readOnly={readOnly || pending || loading}
+                  readOnly={readOnly}
                   spellCheck={spellCheck}
                   autoCapitalize={!capitalize ? 'off' : undefined}
+                  required={required}
+                  aria-required={required}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={errorId}
                   className={clsx(
                     'w-full h-24 resize-none',
                     Boolean(error) && 'error',
@@ -227,6 +281,7 @@ export default function FieldsetWithStatus({
                     accessory={loading && <Spinner
                       className="translate-y-[0.5px]"
                     />}
+                    readOnly={readOnly}
                     {...inputProps}
                   />
                   : <input
@@ -237,6 +292,9 @@ export default function FieldsetWithStatus({
             {accessory}
           </div>}
         </div>
+        {footer && <div className="mt-3">
+          {footer}
+        </div>}
       </div>
   );
 };

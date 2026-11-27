@@ -8,8 +8,10 @@ import FocalLengthShareModal from '@/focal/FocalLengthShareModal';
 import { useAppState } from '@/app/AppState';
 import RecipeShareModal from '@/recipe/RecipeShareModal';
 import LensShareModal from '@/lens/LensShareModal';
-import YearShareModal from '@/years/YearShareModal';
+import YearShareModal from '@/year/YearShareModal';
 import RecentsShareModal from '@/recents/RecentsShareModal';
+import AlbumShareModal from '@/album/AlbumShareModal';
+import QueryShareModal from '@/query/QueryShareModal';
 
 export default function ShareModals() {
   const { shareModalProps = {} } = useAppState();
@@ -19,10 +21,12 @@ export default function ShareModals() {
     photos,
     count,
     dateRange,
+    query,
     recent,
     year,
     camera,
     lens,
+    album,
     tag,
     recipe,
     film,
@@ -32,10 +36,12 @@ export default function ShareModals() {
   if (photo) {
     return <PhotoShareModal {...{
       photo,
+      query,
       recent,
       year,
       camera,
       lens,
+      album,
       tag,
       recipe,
       film,
@@ -43,7 +49,9 @@ export default function ShareModals() {
     }} />;
   } else if (photos) {
     const attributes = {photos, count, dateRange};
-    if (recent) {
+    if (query) {
+      return <QueryShareModal {...{ query, ...attributes }} />;
+    } else if (recent) {
       return <RecentsShareModal {...{ ...attributes }} />;
     } else if (year) {
       return <YearShareModal {...{ year, ...attributes }} />;
@@ -51,6 +59,8 @@ export default function ShareModals() {
       return <CameraShareModal {...{ camera, ...attributes }} />;
     } else if (lens) {
       return <LensShareModal {...{ lens, ...attributes }} />;
+    } else if (album) {
+      return <AlbumShareModal {...{ album, ...attributes }} />;
     } else if (tag) {
       return <TagShareModal {...{ tag, ...attributes }} />;
     } else if (film) {

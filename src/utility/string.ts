@@ -1,11 +1,18 @@
+export type MakeModelTextLength =
+  'long' |    // Unmodified make and model
+  'medium' |  // Make and model, with modifiers removed
+  'short';    // Model only
+
 export const convertStringToArray = (
   string?: string,
   shouldParameterize = true,
+  shouldSplitOnComma = true,
 ) => string
-  ? string.split(',').map(item => shouldParameterize
-    ? parameterize(item)
-    : item.trim())
-  : undefined;
+  ? (shouldSplitOnComma ? string.split(',') : [string])
+    .map(item => shouldParameterize
+      ? parameterize(item)
+      : item.trim())
+  : [];
 
 export const capitalize = (string: string) =>
   string.charAt(0).toLocaleUpperCase() + string.slice(1);
@@ -27,6 +34,7 @@ export const parameterize = (
     // Remove punctuation
     .replaceAll(/['"!@#$%^*()=[\]{};:/?,<>\\/`~]/gi, '')
     // Removes non-alphanumeric characters, if configured
+    // (breaks i18m)
     .replaceAll(
       shouldRemoveNonAlphanumeric
         ? /([^a-z0-9-])/gi
@@ -66,6 +74,9 @@ export const depluralize = (string: string) =>
   /ses$/i.test(string)
     ? string.replace(/es$/i, '')
     : string.replace(/s$/i, '');
+
+export const startsWithHangingPunctuation = (text: string) =>
+  /^["'“”‘’„‚«»‹›¿¡(\[{—–-]/.test(text);
 
 export const formatCountDescriptive = (
   count: number,

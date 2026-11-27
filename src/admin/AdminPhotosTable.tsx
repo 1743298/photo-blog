@@ -5,41 +5,54 @@ import AdminTable from './AdminTable';
 import { Fragment } from 'react';
 import PhotoSmall from '@/photo/PhotoSmall';
 import { clsx } from 'clsx/lite';
-import { pathForAdminPhotoEdit, pathForPhoto } from '@/app/path';
-import Link from 'next/link';
+import { pathForAdminPhotoEdit } from '@/app/path';
+import { COLOR_SORT_ENABLED } from '@/app/config';
 import PhotoDate from '@/photo/PhotoDate';
 import EditButton from './EditButton';
 import { useAppState } from '@/app/AppState';
 import { RevalidatePhoto } from '@/photo/InfinitePhotoScroll';
 import PhotoSyncButton from './PhotoSyncButton';
-import DeletePhotoButton from './DeletePhotoButton';
 import { Timezone } from '@/utility/timezone';
-import Tooltip from '@/components/Tooltip';
-import { photoNeedsToBeSynced, getPhotoSyncStatusText } from '@/photo/sync';
+import { photoNeedsToBeUpdated } from '@/photo/update';
 import PhotoVisibilityIcon from '@/photo/visibility/PhotoVisibilityIcon';
+import { doesPhotoHaveDefaultVisibility } from '@/photo/visibility';
+import UpdateTooltip from '@/photo/update/UpdateTooltip';
+import PhotoColors from '@/photo/color/PhotoColors';
+import SyncColorButton from '@/photo/color/SyncColorButton';
+import ColorDot from '@/photo/color/ColorDot';
+import { getKeyColorFromPhoto } from '@/photo/color/client';
+import AdminPhotoMenu from './AdminPhotoMenu';
+import PhotoLink from '@/photo/PhotoLink';
 
 export default function AdminPhotosTable({
   photos,
   onLastPhotoVisible,
   revalidatePhoto,
   photoIdsSyncing = [],
-  hasAiTextGeneration,
+  hasAiContentGeneration,
   dateType = 'createdAt',
   canEdit = true,
+  canSync,
   canDelete = true,
   timezone,
   shouldScrollIntoViewOnExternalSync,
+  updateMode,
+  debugColorData,
 }: {
   photos: Photo[],
   onLastPhotoVisible?: () => void
   revalidatePhoto?: RevalidatePhoto
   photoIdsSyncing?: string[]
-  hasAiTextGeneration: boolean
+  hasAiContentGeneration: boolean
   dateType?: 'createdAt' | 'updatedAt'
   canEdit?: boolean
+  canSync?: boolean
   canDelete?: boolean
   timezone?: Timezone
   shouldScrollIntoViewOnExternalSync?: boolean
+  // Only sync color data where possible
+  updateMode?: boolean
+  debugColorData?: boolean
 }) {
   const { invalidateSwr } = useAppState();
 
@@ -63,32 +76,55 @@ export default function AdminPhotosTable({
             'flex flex-col lg:flex-row min-w-0 gap-x-3',
             opacityForPhotoId(photo.id),
           )}>
-            <Link
+            <span
               key={photo.id}
-              href={pathForPhoto({ photo })}
-              className="lg:min-w-[50%] flex items-center gap-2"
-              prefetch={false}
+              className="lg:min-w-[50%] flex items-center gap-1.5"
             >
+              {COLOR_SORT_ENABLED &&
+                <span className="inline-flex shrink-0">
+                  <ColorDot
+                    color={getKeyColorFromPhoto(photo)}
+                    title="Key Color"
+                    size="small"
+                    className="mr-1"
+                  />
+                </span>}
               <span className={clsx(
-                'flex w-full gap-1.5',
+                'truncate',
                 photo.hidden && 'text-dim',
               )}>
-                <span className="truncate">
+                <PhotoLink
+                  photo={photo}
+                  prefetch={false}
+                  showHover
+                >
                   {titleForPhoto(photo, false)}
-                </span>
-                <span className="inline-flex items-center">
-                  <PhotoVisibilityIcon photo={photo} />
-                </span>
+                </PhotoLink>
+                {debugColorData && photo.colorData &&
+                  <div>
+                    <PhotoColors colorData={photo.colorData} />
+                  </div>}
               </span>
+              {!doesPhotoHaveDefaultVisibility(photo) &&
+                <span className={clsx(
+                  'inline-flex items-center',
+                  photo.hidden && 'text-dim',
+                )}>
+                  <PhotoVisibilityIcon photo={photo} />
+                </span>}
+              {photoNeedsToBeUpdated(photo) &&
+                <span>
+                  <UpdateTooltip photo={photo} />
+                </span>}
               {photo.priorityOrder !== null &&
                 <span className={clsx(
-                  'text-xs leading-none px-1.5 py-1 rounded-xs',
-                  'dark:text-gray-300',
-                  'bg-gray-100 dark:bg-gray-800',
+                  'px-[5px] py-[3px] sm:ml-[3px]',
+                  'text-xs leading-none',
+                  'bg-medium text-main rounded-sm',
                 )}>
                   {photo.priorityOrder}
                 </span>}
-            </Link>
+            </span>
             <div className={clsx(
               'flex min-w-0 gap-1.5 w-full',
               'lg:w-[50%] uppercase',
@@ -98,14 +134,6 @@ export default function AdminPhotosTable({
                 {...{ photo, dateType, timezone }}
                 className="truncate"
               />
-              {photoNeedsToBeSynced(photo) &&
-                <span>
-                  <Tooltip
-                    content={getPhotoSyncStatusText(photo)}
-                    classNameTrigger="text-blue-600 dark:text-blue-400"
-                    supportMobile
-                  />
-                </span>}
             </div>
           </div>
           <div className={clsx(
@@ -114,23 +142,28 @@ export default function AdminPhotosTable({
           )}>
             {canEdit &&
               <EditButton path={pathForAdminPhotoEdit(photo)} />}
-            <PhotoSyncButton
-              photo={photo}
-              onSyncComplete={invalidateSwr}
-              isSyncingExternal={photoIdsSyncing.includes(photo.id)}
-              hasAiTextGeneration={hasAiTextGeneration}
-              disabled={photoIdsSyncing.length > 0}
-              className={opacityForPhotoId(photo.id)}
-              shouldConfirm
-              shouldToast
-              shouldScrollIntoViewOnExternalSync={
-                shouldScrollIntoViewOnExternalSync}
-            />
-            {canDelete &&
-              <DeletePhotoButton
+            {canSync &&
+              <PhotoSyncButton
                 photo={photo}
-                onDelete={() => revalidatePhoto?.(photo.id, true)}
+                onSyncComplete={invalidateSwr}
+                isSyncingExternal={photoIdsSyncing.includes(photo.id)}
+                hasAiContentGeneration={hasAiContentGeneration}
+                disabled={photoIdsSyncing.length > 0}
+                className={opacityForPhotoId(photo.id)}
+                shouldConfirm
+                shouldToast
+                shouldScrollIntoViewOnExternalSync={
+                  shouldScrollIntoViewOnExternalSync}
+                updateMode={updateMode}
               />}
+            {debugColorData &&
+              <SyncColorButton photoId={photo.id} />}
+            <AdminPhotoMenu
+              photo={photo}
+              revalidatePhoto={revalidatePhoto}
+              disabled={!canEdit || !canDelete}
+              alwaysVisible
+            />
           </div>
         </Fragment>)}
     </AdminTable>

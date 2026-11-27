@@ -1,5 +1,5 @@
 import LoaderButton from '@/components/primitives/LoaderButton';
-import { syncPhotoAction } from '@/photo/actions';
+import { storeColorDataForPhotoAction, syncPhotoAction } from '@/photo/actions';
 import IconGrSync from '@/components/icons/IconGrSync';
 import { toastSuccess } from '@/toast';
 import { ComponentProps, useRef, useState } from 'react';
@@ -8,13 +8,16 @@ import clsx from 'clsx/lite';
 import useScrollIntoView from '@/utility/useScrollIntoView';
 import { Photo } from '@/photo';
 import { syncPhotoConfirmText } from './confirm';
+import { isPhotoOnlyMissingColorData } from '@/photo/update';
+import IconBroom from '@/components/icons/IconBroom';
 
 export default function PhotoSyncButton({
   photo,
   onSyncComplete,
+  updateMode,
   className,
   isSyncingExternal,
-  hasAiTextGeneration,
+  hasAiContentGeneration,
   disabled,
   shouldConfirm,
   shouldToast,
@@ -22,8 +25,9 @@ export default function PhotoSyncButton({
 }: {
   photo: Photo
   onSyncComplete?: () => void
+  updateMode?: boolean
   isSyncingExternal?: boolean
-  hasAiTextGeneration: boolean
+  hasAiContentGeneration: boolean
   shouldConfirm?: boolean
   shouldToast?: boolean
   shouldScrollIntoViewOnExternalSync?: boolean
@@ -39,21 +43,40 @@ export default function PhotoSyncButton({
       shouldScrollIntoViewOnExternalSync,
   });
 
+  const onlySyncColorData = updateMode &&
+    isPhotoOnlyMissingColorData(photo);
+
   return (
-    <Tooltip content="Regenerate photo data">
+    <Tooltip
+      content={onlySyncColorData
+        ? 'Update color data'
+        : 'Regenerate photo data'}
+      triggerIsFocusable
+    >
       <LoaderButton
         ref={ref}
-        className={clsx('scroll-mt-8', className)}
-        icon={<IconGrSync
-          className="translate-y-[0.5px] translate-x-[0.5px]"
-        />}
+        className={clsx(
+          'scroll-mt-32',
+          className,
+        )}
+        icon={updateMode
+          ? <IconBroom size={18} />
+          : <IconGrSync
+            className="translate-y-[0.5px] translate-x-[0.5px]"
+          />}
         onClick={() => {
           if (
             !shouldConfirm ||
-            window.confirm(syncPhotoConfirmText(photo, hasAiTextGeneration))
+            window.confirm(syncPhotoConfirmText(
+              photo,
+              hasAiContentGeneration,
+              onlySyncColorData,
+            ))
           ) {
             setIsSyncing(true);
-            syncPhotoAction(photo.id)
+            (onlySyncColorData
+              ? storeColorDataForPhotoAction(photo.id)
+              : syncPhotoAction(photo.id, { updateMode }))
               .then(() => {
                 onSyncComplete?.();
                 if (shouldToast) {

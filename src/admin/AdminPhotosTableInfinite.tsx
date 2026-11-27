@@ -8,9 +8,10 @@ import { ComponentProps } from 'react';
 export default function AdminPhotosTableInfinite({
   initialOffset,
   itemsPerPage,
-  hasAiTextGeneration,
+  hasAiContentGeneration,
   canEdit,
   canDelete,
+  debugColorData,
 }: {
   initialOffset: number
   itemsPerPage: number
@@ -24,14 +25,16 @@ export default function AdminPhotosTableInfinite({
       sortBy="createdAt"
       includeHiddenPhotos
     >
-      {({ photos, onLastPhotoVisible, revalidatePhoto }) =>
+      {({ key, photos, onLastPhotoVisible, revalidatePhoto }) =>
         <AdminPhotosTable
+          key={key}
           photos={photos}
           onLastPhotoVisible={onLastPhotoVisible}
           revalidatePhoto={revalidatePhoto}
-          hasAiTextGeneration={hasAiTextGeneration}
+          hasAiContentGeneration={hasAiContentGeneration}
           canEdit={canEdit}
           canDelete={canDelete}
+          debugColorData={debugColorData}
         />}
     </InfinitePhotoScroll>
   );

@@ -3,7 +3,7 @@
 import { ComponentProps, useRef } from 'react';
 import { clsx } from 'clsx/lite';
 import Link from 'next/link';
-import useVisible from '@/utility/useVisible';
+import useVisibility from '@/utility/useVisibility';
 import OGLoaderImage from './OGLoaderImage';
 
 export type OGTilePropsCore = Omit<
@@ -26,7 +26,7 @@ export default function OGTile({
 } & ComponentProps<typeof OGLoaderImage>) {
   const ref = useRef<HTMLAnchorElement>(null);
 
-  useVisible({ ref, onVisible });
+  useVisibility({ ref, onVisible });
 
   return (
     <Link
@@ -35,7 +35,7 @@ export default function OGTile({
       className={clsx(
         'group',
         'block w-full rounded-md overflow-hidden',
-        'border-medium shadow-xs',
+        'border border-medium shadow-xs',
         riseOnHover && 'hover:-translate-y-1.5 transition-transform',
       )}
     >

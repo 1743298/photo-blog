@@ -1,14 +1,13 @@
 import { getPhotosCached } from '@/photo/cache';
 import {
   IMAGE_OG_DIMENSION_SMALL,
-  MAX_PHOTOS_TO_SHOW_PER_CATEGORY,
+  PHOTO_PREVIEW_QUERY_OPTIONS,
 } from '@/image-response';
-import YearImageResponse from
-  '@/image-response/YearImageResponse';
+import YearImageResponse from '@/year/YearImageResponse';
 import { getIBMPlexMono } from '@/app/font';
 import { ImageResponse } from 'next/og';
 import { getImageResponseCacheControlHeaders } from '@/image-response/cache';
-import { getUniqueYears } from '@/photo/db/query';
+import { getUniqueYears } from '@/photo/query';
 import { staticallyGenerateCategoryIfConfigured } from '@/app/static';
 
 export const generateStaticParams = staticallyGenerateCategoryIfConfigured(
@@ -30,7 +29,7 @@ export async function GET(
     headers,
   ] = await Promise.all([
     getPhotosCached({
-      limit: MAX_PHOTOS_TO_SHOW_PER_CATEGORY,
+      ...PHOTO_PREVIEW_QUERY_OPTIONS,
       year: year,
     }),
     getIBMPlexMono(),

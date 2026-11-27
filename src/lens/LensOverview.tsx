@@ -1,7 +1,7 @@
-import { Photo, PhotoDateRange } from '@/photo';
+import { Photo, PhotoDateRangePostgres } from '@/photo';
 import { Lens, createLensKey } from '.';
 import LensHeader from './LensHeader';
-import PhotoGridContainer from '@/photo/PhotoGridContainer';
+import PhotoGridHybridContainer from '@/photo/PhotoGridHybridContainer';
 
 export default function LensOverview({
   lens,
@@ -13,11 +13,11 @@ export default function LensOverview({
   lens: Lens,
   photos: Photo[],
   count: number,
-  dateRange?: PhotoDateRange,
+  dateRange?: PhotoDateRangePostgres,
   animateOnFirstLoadOnly?: boolean,
 }) {
   return (
-    <PhotoGridContainer {...{
+    <PhotoGridHybridContainer {...{
       cacheKey: `lens-${createLensKey(lens)}`,
       photos,
       count,

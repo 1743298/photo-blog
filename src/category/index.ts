@@ -1,18 +1,22 @@
-import { Photo, PhotoDateRange } from '../photo';
+import { Photo, PhotoDateRangePostgres } from '../photo';
 import { Camera, Cameras } from '@/camera';
 import { Films } from '@/film';
+import type { AppTextState } from '@/i18n/state';
 import { Lens, Lenses } from '@/lens';
 import { Tags } from '@/tag';
 import { FocalLengths } from '@/focal';
 import { Recipes } from '@/recipe';
 import { Recents } from '@/recents';
-import { Years } from '@/years';
+import { Years } from '@/year';
+import { parseCommaSeparatedKeyString } from '@/utility/key';
+import { Album, Albums } from '@/album';
 
-const CATEGORY_KEYS = [
+export const CATEGORY_KEYS = [
   'recents',
   'years',
   'cameras',
   'lenses',
+  'albums',
   'tags',
   'recipes',
   'films',
@@ -23,8 +27,26 @@ export type CategoryKey = (typeof CATEGORY_KEYS)[number];
 
 export type CategoryKeys = CategoryKey[];
 
+export const getCategoryTitle = (
+  category: CategoryKey,
+  appText: AppTextState,
+) => {
+  switch (category) {
+    case 'recents': return appText.category.recentPlural;
+    case 'years': return appText.category.yearPlural;
+    case 'cameras': return appText.category.cameraPlural;
+    case 'lenses': return appText.category.lensPlural;
+    case 'albums': return appText.category.albumPlural;
+    case 'tags': return appText.category.tagPlural;
+    case 'recipes': return appText.category.recipePlural;
+    case 'films': return appText.category.filmPlural;
+    case 'focal-lengths': return appText.category.focalLengthPlural;
+  }
+};
+
 export const DEFAULT_CATEGORY_KEYS: CategoryKeys = [
   'recents',
+  'albums',
   'tags',
   'cameras',
   'lenses',
@@ -32,22 +54,31 @@ export const DEFAULT_CATEGORY_KEYS: CategoryKeys = [
   'films',
 ];
 
+export const parseOrderedCategoriesFromString = (
+  string?: string,
+) =>
+  parseCommaSeparatedKeyString({
+    string,
+    acceptedKeys: CATEGORY_KEYS,
+    defaultKeys: DEFAULT_CATEGORY_KEYS,
+  });
+
 export interface CategoryQueryMeta {
   count: number
   lastModified: Date
 }
 
-export const getHiddenCategories = (keys: CategoryKeys): CategoryKeys =>
-  CATEGORY_KEYS.filter(key => !keys.includes(key));
-
 export const getHiddenDefaultCategories = (keys: CategoryKeys): CategoryKeys =>
   DEFAULT_CATEGORY_KEYS.filter(key => !keys.includes(key));
 
 export interface PhotoSetCategory {
+  // Text search results, which behave like a category but aren't enumerable
+  query?: string
   recent?: boolean
   year?: string
   camera?: Camera
   lens?: Lens
+  album?: Album
   tag?: string
   recipe?: string
   film?: string
@@ -55,31 +86,22 @@ export interface PhotoSetCategory {
 }
 
 export interface PhotoSetCategories {
+  recents: Recents
+  years: Years
   cameras: Cameras
   lenses: Lenses
+  albums: Albums
   tags: Tags
   recipes: Recipes
   films: Films
   focalLengths: FocalLengths
-  years: Years
-  recents: Recents
 }
 
 export interface PhotoSetAttributes {
   photos: Photo[]
   count?: number
-  dateRange?: PhotoDateRange
+  dateRange?: PhotoDateRangePostgres
 }
-
-export const getOrderedCategoriesFromString = (
-  categories?: string,
-): CategoryKeys =>
-  categories
-    ? categories
-      .split(',')
-      .map(category => category.trim().toLocaleLowerCase() as CategoryKey)
-      .filter(category => CATEGORY_KEYS.includes(category))
-    : DEFAULT_CATEGORY_KEYS;
 
 export const sortCategoryByCount = (
   a: { count: number },

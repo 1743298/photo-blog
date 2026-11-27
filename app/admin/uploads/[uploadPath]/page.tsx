@@ -1,19 +1,28 @@
-import { PARAM_UPLOAD_TITLE, PATH_ADMIN } from '@/app/path';
+import {
+  PARAM_UPLOAD_TITLE,
+  PATH_ADMIN,
+  PATH_ADMIN_UPLOADS,
+} from '@/app/path';
 import { extractImageDataFromBlobPath } from '@/photo/server';
 import { redirect } from 'next/navigation';
 import {
+  getUniqueCamerasCached,
   getUniqueFilmsCached,
+  getUniqueLensesCached,
   getUniqueRecipesCached,
   getUniqueTagsCached,
 } from '@/photo/cache';
 import UploadPageClient from '@/photo/UploadPageClient';
 import {
-  AI_TEXT_AUTO_GENERATED_FIELDS,
-  AI_TEXT_GENERATION_ENABLED,
+  AI_CONTENT_GENERATION_ENABLED,
+  AUTO_GENERATE_LOCATIONS,
   BLUR_ENABLED,
+  HAS_LOCATION_SERVICES,
 } from '@/app/config';
 import ErrorNote from '@/components/ErrorNote';
-import { getRecipeTitleForData } from '@/photo/db/query';
+import { getAlbumsWithMeta } from '@/album/query';
+import { addAiTextToFormData } from '@/photo/ai/server';
+import AdminPage from '@/admin/AdminPage';
 
 export const maxDuration = 60;
 
@@ -26,55 +35,53 @@ export default async function UploadPage({ params, searchParams }: Params) {
   const uploadPath = (await params).uploadPath;
   const title = (await searchParams)[PARAM_UPLOAD_TITLE];
 
-  const {
-    blobId,
-    formDataFromExif,
-    imageResizedBase64: imageThumbnailBase64,
-    shouldStripGpsData,
-    error,
-  } = await extractImageDataFromBlobPath(uploadPath, {
-    includeInitialPhotoFields: true,
-    generateBlurData: BLUR_ENABLED,
-    generateResizedImage: AI_TEXT_GENERATION_ENABLED,
-  });
+  const [
+    albums,
+    uniqueRecipes,
+    uniqueFilms,
+    uniqueTags,
+    uniqueCameras,
+    uniqueLenses, {
+      blobId,
+      formDataFromExif: _formDataFromExif,
+      imageResizedBase64: imageThumbnailBase64,
+      shouldStripGpsData,
+      error,
+    }] = await Promise.all([
+    getAlbumsWithMeta(),
+    getUniqueRecipesCached(),
+    getUniqueFilmsCached(),
+    getUniqueTagsCached(),
+    getUniqueCamerasCached(true),
+    getUniqueLensesCached(true),
+    extractImageDataFromBlobPath(uploadPath, {
+      includeInitialPhotoFields: true,
+      generateBlurData: BLUR_ENABLED,
+      generateResizedImage: AI_CONTENT_GENERATION_ENABLED,
+      lookupLocation: AUTO_GENERATE_LOCATIONS,
+    }),
+  ]);
 
   const isDataMissing =
-    !formDataFromExif ||
-    (AI_TEXT_GENERATION_ENABLED && !imageThumbnailBase64);
+    !_formDataFromExif ||
+    (AI_CONTENT_GENERATION_ENABLED && !imageThumbnailBase64);
 
   if (isDataMissing && !error) {
     // Only redirect if there's no error to report
     redirect(PATH_ADMIN);
   }
 
-  const [
+  const formDataFromExif = await addAiTextToFormData({
+    formData: _formDataFromExif,
+    imageBase64: imageThumbnailBase64,
     uniqueTags,
-    uniqueRecipes,
-    uniqueFilms,
-    recipeTitle,
-  ] = await Promise.all([
-    getUniqueTagsCached(),
-    getUniqueRecipesCached(),
-    getUniqueFilmsCached(),
-    formDataFromExif?.recipeData && formDataFromExif.film
-      ? getRecipeTitleForData(
-        formDataFromExif.recipeData,
-        formDataFromExif.film,
-      )
-      : undefined,
-  ]);
+  });
 
-  const hasAiTextGeneration = AI_TEXT_GENERATION_ENABLED;
-  let textFieldsToAutoGenerate = AI_TEXT_AUTO_GENERATED_FIELDS;
+  const hasAiContentGeneration = AI_CONTENT_GENERATION_ENABLED;
 
   if (formDataFromExif) {
-    if (recipeTitle) {
-      formDataFromExif.recipeTitle = recipeTitle;
-    }
     if (typeof title === 'string') {
       formDataFromExif.title = title;
-      textFieldsToAutoGenerate = textFieldsToAutoGenerate
-        .filter(field => field !== 'title');
     }
   }
 
@@ -83,16 +90,26 @@ export default async function UploadPage({ params, searchParams }: Params) {
       ? <UploadPageClient {...{
         blobId,
         formDataFromExif,
+        albums,
         uniqueTags,
         uniqueRecipes,
         uniqueFilms,
-        hasAiTextGeneration,
-        textFieldsToAutoGenerate,
+        uniqueCameras,
+        uniqueLenses,
+        hasAiContentGeneration,
         imageThumbnailBase64,
         shouldStripGpsData,
+        hasLocationServices: HAS_LOCATION_SERVICES,
       }} />
-      : <ErrorNote>
-        {error ?? 'Unknown error'}
-      </ErrorNote>
+      : <AdminPage
+        backPath={PATH_ADMIN_UPLOADS}
+        backLabel="Uploads"
+        breadcrumb={uploadPath}
+        breadcrumbEllipsis
+      >
+        <ErrorNote>
+          {error ?? 'Unknown error'}
+        </ErrorNote>
+      </AdminPage>
   );
 };

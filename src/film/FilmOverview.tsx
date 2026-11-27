@@ -1,6 +1,6 @@
-import { Photo, PhotoDateRange } from '@/photo';
+import { Photo, PhotoDateRangePostgres } from '@/photo';
 import FilmHeader from './FilmHeader';
-import PhotoGridContainer from '@/photo/PhotoGridContainer';
+import PhotoGridHybridContainer from '@/photo/PhotoGridHybridContainer';
 
 export default function FilmOverview({
   film,
@@ -12,11 +12,11 @@ export default function FilmOverview({
   film: string,
   photos: Photo[],
   count: number,
-  dateRange?: PhotoDateRange,
+  dateRange?: PhotoDateRangePostgres,
   animateOnFirstLoadOnly?: boolean,
 }) {
   return (
-    <PhotoGridContainer {...{
+    <PhotoGridHybridContainer {...{
       cacheKey: `film-${film}`, 
       photos,
       count,

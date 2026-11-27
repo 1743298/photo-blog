@@ -1,10 +1,22 @@
 import { POSTGRES_SSL_ENABLED } from '@/app/config';
 import { removeParamsFromUrl } from '@/utility/url';
-import { Pool, QueryResult, QueryResultRow } from 'pg';
+import { Pool, QueryResultRow } from 'pg';
 
 const pool = new Pool({
-  connectionString: removeParamsFromUrl(process.env.POSTGRES_URL, ['sslmode']),
+  ...process.env.POSTGRES_URL && {
+    connectionString: removeParamsFromUrl(
+      process.env.POSTGRES_URL,
+      ['sslmode'],
+    ),
+  },
   ...POSTGRES_SSL_ENABLED && { ssl: true },
+});
+
+// Without an 'error' listener, an idle client terminated by the database
+// provider (e.g. Neon suspending compute) emits an unhandled event on
+// the pool that takes down the whole Node process
+pool.on('error', error => {
+  console.error('Postgres pool error', { error });
 });
 
 export type Primitive = string | number | boolean | undefined | null;
@@ -12,18 +24,7 @@ export type Primitive = string | number | boolean | undefined | null;
 export const query = async <T extends QueryResultRow = any>(
   queryString: string,
   values: Primitive[] = [],
-) => {
-  const client = await pool.connect();
-  let response: QueryResult<T>;
-  try {
-    response = await client.query<T>(queryString, values);
-  } catch (error) {
-    throw error;
-  } finally {
-    client.release();
-  }
-  return response;
-};
+) => pool.query<T>(queryString, values);
 
 export const sql = <T extends QueryResultRow>(
   strings: TemplateStringsArray,
@@ -41,17 +42,6 @@ export const sql = <T extends QueryResultRow>(
 
   return query<T>(result, values);
 };
-
-export const convertArrayToPostgresString = (
-  array?: string[],
-  type: 'braces' | 'brackets' | 'parentheses' = 'braces', 
-) => array
-  ? type === 'braces'
-    ? `{${array.join(',')}}`
-    : type === 'brackets'
-      ? `[${array.map(i => `'${i}'`).join(',')}]`
-      : `(${array.map(i => `'${i}'`).join(',')})`
-  : null;
 
 const isTemplateStringsArray = (
   strings: unknown,

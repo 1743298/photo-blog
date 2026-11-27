@@ -5,6 +5,7 @@ import {
   ReactNode,
   SetStateAction,
   Dispatch,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -12,40 +13,52 @@ import {
   useTransition,
 } from 'react';
 import {
+  PATH_LIBRARY,
+  PATH_ADMIN_AI_MODELS,
   PATH_ADMIN_BASELINE,
   PATH_ADMIN_COMPONENTS,
   PATH_ADMIN_CONFIGURATION,
   PATH_ADMIN_INSIGHTS,
   PATH_ADMIN_PHOTOS,
   PATH_ADMIN_RECIPES,
+  PATH_ADMIN_ALBUMS,
   PATH_ADMIN_TAGS,
   PATH_ADMIN_UPLOADS,
   PATH_FULL_INFERRED,
   PATH_GRID_INFERRED,
   PATH_SIGN_IN,
+  pathForAlbum,
   pathForCamera,
   pathForFilm,
   pathForFocalLength,
   pathForLens,
   pathForPhoto,
+  pathForQuery,
   pathForRecipe,
   pathForTag,
   pathForYear,
   PREFIX_RECENTS,
+  isPathFull,
+  isPathGrid,
+  isPathLibrary,
+  isPathRoot,
 } from '../app/path';
 import Modal from '../components/Modal';
 import { clsx } from 'clsx/lite';
-import { useDebounce } from 'use-debounce';
 import Spinner from '../components/Spinner';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { BiDesktop, BiLockAlt, BiMoon, BiSun } from 'react-icons/bi';
-import { IoInvertModeSharp } from 'react-icons/io5';
+import { IoClose, IoInvertModeSharp } from 'react-icons/io5';
 import { useAppState } from '@/app/AppState';
-import { searchPhotosAction } from '@/photo/actions';
+import { useUploadState } from '@/admin/upload/UploadState';
 import { RiToolsFill } from 'react-icons/ri';
 import { signOutAction } from '@/auth/actions';
-import { getKeywordsForPhoto, titleForPhoto } from '@/photo';
+import {
+  getKeywordsForPhoto,
+  photoQuantityText,
+  titleForPhoto,
+} from '@/photo';
 import PhotoDate from '@/photo/PhotoDate';
 import PhotoSmall from '@/photo/PhotoSmall';
 import {
@@ -57,15 +70,17 @@ import {
 } from '@/tag';
 import { formatCount, formatCountDescriptive } from '@/utility/string';
 import CommandKItem from './CommandKItem';
+import { COMMAND_K_MINIMUM_QUERY_LENGTH, filterCommandK } from '.';
 import {
   CATEGORY_VISIBILITY,
+  COLOR_SORT_ENABLED,
   GRID_HOMEPAGE_ENABLED,
   HIDE_TAGS_WITH_ONE_PHOTO,
 } from '@/app/config';
 import { DialogDescription, DialogTitle } from '@radix-ui/react-dialog';
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import InsightsIndicatorDot from '@/admin/insights/InsightsIndicatorDot';
-import { PhotoSetCategories } from '@/category';
+import { PhotoSetCategories, getCategoryTitle } from '@/category';
 import { formatCameraText } from '@/camera';
 import { formatFocalLength } from '@/focal';
 import { formatRecipe } from '@/recipe';
@@ -86,16 +101,23 @@ import IconFavs from '@/components/icons/IconFavs';
 import { useAppText } from '@/i18n/state/client';
 import LoaderButton from '@/components/primitives/LoaderButton';
 import IconRecents from '@/components/icons/IconRecents';
-import { CgFileDocument } from 'react-icons/cg';
+import KeyCommand from '@/components/primitives/KeyCommand';
+import { CgClose, CgFileDocument } from 'react-icons/cg';
 import { FaRegUserCircle } from 'react-icons/fa';
 import { formatDistanceToNow } from 'date-fns';
 import IconCheck from '@/components/icons/IconCheck';
+import { getSortStateFromPath } from '@/photo/sort/path';
+import IconSort from '@/components/icons/IconSort';
+import { useSelectPhotosState } from '@/admin/select/SelectPhotosState';
+import { useEditTitlesState } from '@/admin/edit-titles/EditTitlesState';
+import IconAlbum from '@/components/icons/IconAlbum';
+import usePhotoQuery from '@/photo/usePhotoQuery';
+import useClearCache from '@/admin/useClearCache';
 
 const DIALOG_TITLE = 'Global Command-K Menu';
 const DIALOG_DESCRIPTION = 'For searching photos, views, and settings';
 
 const LISTENER_KEYDOWN = 'keydown';
-const MINIMUM_QUERY_LENGTH = 2;
 
 const MAX_HEIGHT = '20rem';
 
@@ -108,13 +130,18 @@ type CommandKItem = {
   annotationAria?: string
   path?: string
   action?: () => void | Promise<void | boolean>
-}
+};
 
 type CommandKSection = {
   heading: string
   accessory?: ReactNode
   items: CommandKItem[]
-}
+};
+
+const renderCheck = (isChecked?: boolean) =>
+  isChecked
+    ? <IconCheck size={12} className="translate-y-[-0.5px]" />
+    : undefined;
 
 const renderToggle = (
   label: string,
@@ -123,7 +150,7 @@ const renderToggle = (
 ): CommandKItem => ({
   label: `Toggle ${label}`,
   action: () => onToggle?.(prev => !prev),
-  annotation: isEnabled ? <IconCheck size={12} /> : undefined,
+  annotation: renderCheck(isEnabled),
 });
 
 export default function CommandKClient({
@@ -131,38 +158,44 @@ export default function CommandKClient({
   years: _years,
   cameras,
   lenses,
+  albums,
   tags: _tags,
   recipes,
   films,
   focalLengths,
+  isInEmptyState,
   footer,
 }: {
+  isInEmptyState?: boolean
   footer?: string
 } & PhotoSetCategories) {
   const pathname = usePathname();
+
+  const appText = useAppText();
 
   const {
     isUserSignedIn,
     clearAuthStateAndRedirectIfNecessary,
     isCommandKOpen: isOpen,
-    startUpload,
+    nextCommandKQuery,
     photosCountTotal,
     photosCountHidden = 0,
     uploadsCount,
+    albumsCount,
     tagsCount,
     recipesCount,
-    selectedPhotoIds,
-    setSelectedPhotoIds,
     insightsIndicatorStatus,
     isGridHighDensity,
     areZoomControlsShown,
     arePhotosMatted,
     areAdminDebugToolsEnabled,
+    isAdminAiModelDebugEnabled,
     shouldShowBaselineGrid,
     shouldDebugImageFallbacks,
     shouldDebugInsights,
     shouldDebugRecipeOverlays,
     setIsCommandKOpen: setIsOpen,
+    setNextCommandKQuery,
     setShouldShowBaselineGrid,
     setIsGridHighDensity,
     setAreZoomControlsShown,
@@ -172,7 +205,41 @@ export default function CommandKClient({
     setShouldDebugRecipeOverlays,
   } = useAppState();
 
-  const appText = useAppText();
+  const { startUpload } = useUploadState();
+
+  const clearCache = useClearCache();
+
+  const {
+    isSelectingPhotos,
+    startSelectingPhotos,
+    stopSelectingPhotos,
+  } = useSelectPhotosState();
+
+  const {
+    isEditingTitles,
+    startEditingTitles,
+    stopEditingTitles,
+  } = useEditTitlesState();
+
+  const {
+    doesPathOfferSort,
+    isSortedByDefault,
+    isAscending,
+    isTakenAt,
+    isUploadedAt,
+    isColor,
+    descendingLabel,
+    ascendingLabel,
+    pathDescending,
+    pathAscending,
+    pathTakenAt,
+    pathUploadedAt,
+    pathColor,
+    pathClearSort,
+  } = useMemo(
+    () => getSortStateFromPath(pathname, appText),
+    [pathname, appText],
+  );
 
   const isOpenRef = useRef(isOpen);
 
@@ -200,6 +267,7 @@ export default function CommandKClient({
   const shouldCloseAfterWaiting = useRef(false);
   useEffect(() => {
     if (!isWaiting) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setKeyWaiting(undefined);
       if (shouldCloseAfterWaiting.current) {
         setIsOpen?.(false);
@@ -208,23 +276,27 @@ export default function CommandKClient({
     }
   }, [isWaiting, setIsOpen]);
 
-  // Raw query values
-  const [queryLiveRaw, setQueryLive] = useState('');
-  const [queryDebouncedRaw] =
-    useDebounce(queryLiveRaw, 500, { trailing: true });
-
-  // Parameterized query values
-  const queryLive = useMemo(() =>
-    queryLiveRaw.trim().toLocaleLowerCase(), [queryLiveRaw]);
-  const queryDebounced = useMemo(() =>
-    queryDebouncedRaw.trim().toLocaleLowerCase(), [queryDebouncedRaw]);
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [queriedSections, setQueriedSections] = useState<CommandKSection[]>([]);
+  const [query, setQuery] = useState('');
+  const {
+    queryFormatted,
+    photos,
+    count: photosCount,
+    isLoading,
+    reset,
+  } = usePhotoQuery({
+    query,
+    isEnabled: !isPending,
+    minimumQueryLength: COMMAND_K_MINIMUM_QUERY_LENGTH,
+  });
 
   const { setTheme } = useTheme();
 
   const router = useRouter();
+
+  const showAllQueryResults = useCallback(() => {
+    shouldCloseAfterWaiting.current = true;
+    startTransition(() => router.push(pathForQuery(queryFormatted)));
+  }, [queryFormatted, router]);
 
   useEffect(() => {
     isOpenRef.current = isOpen;
@@ -245,55 +317,52 @@ export default function CommandKClient({
     return () => document.removeEventListener(LISTENER_KEYDOWN, down);
   }, [setIsOpen]);
 
-  useEffect(() => {
-    if (queryDebounced.length >= MINIMUM_QUERY_LENGTH && !isPending) {
-      setIsLoading(true);
-      searchPhotosAction(queryDebounced)
-        .then(photos => {
-          if (isOpenRef.current) {
-            setQueriedSections(photos.length > 0
-              ? [{
-                heading: 'Photos',
-                accessory: <IconPhoto size={14} />,
-                items: photos.map(photo => ({
-                  label: titleForPhoto(photo),
-                  keywords: getKeywordsForPhoto(photo),
-                  annotation: <PhotoDate {...{ photo, timezone: undefined }} />,
-                  accessory: <PhotoSmall photo={photo} />,
-                  path: pathForPhoto({ photo }),
-                })),
-              }]
-              : []);
-          } else {
-            // Ignore stale requests that come in after dialog is closed
-            setQueriedSections([]);
-          }
-          setIsLoading(false);
-        })
-        .catch(e => {
-          console.error(e);
-          setQueriedSections([]);
-          setIsLoading(false);
-        });
+  const sectionQuery = useMemo<CommandKSection[]>(() => {
+    if (isOpenRef.current && photos.length > 0) {
+      return [{
+        heading: 'Photos',
+        accessory: <IconPhoto size={14} />,
+        items: [
+          {
+            label: appText.cmdk.found(
+              photoQuantityText(photosCount, appText, false),
+            ),
+            explicitKey: 'view-all',
+            // Keep this row visible for any matching photo query
+            keywords: [queryFormatted],
+            annotation: <KeyCommand modifier="⌘" className="max-sm:hidden">
+              ⏎
+            </KeyCommand>,
+            path: pathForQuery(queryFormatted),
+          },
+          ...photos.map(photo => ({
+            label: titleForPhoto(photo),
+            // Include query so cmdk's client filter can't hide SQL matches
+            // (e.g. multi-word / cross-field ILIKE hits)
+            keywords: [queryFormatted, ...getKeywordsForPhoto(photo)],
+            annotation: <PhotoDate {...{ photo, timezone: undefined }} />,
+            accessory: <PhotoSmall photo={photo} />,
+            path: pathForPhoto({ photo }),
+          })),
+        ],
+      }];
+    } else {
+      return [];
     }
-  }, [queryDebounced, isPending, appText]);
-
-  useEffect(() => {
-    if (queryLive === '') {
-      setQueriedSections([]);
-      setIsLoading(false);
-    } else if (queryLive.length >= MINIMUM_QUERY_LENGTH) {
-      setIsLoading(true);
-    }
-  }, [queryLive]);
+  },
+  [photos, photosCount, appText, queryFormatted],
+  );
 
   useEffect(() => {
     if (!isOpen) {
-      setQueryLive('');
-      setQueriedSections([]);
-      setIsLoading(false);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuery('');
+      reset();
+    } else if (nextCommandKQuery !== undefined) {
+      setQuery(nextCommandKQuery);
+      setNextCommandKQuery?.(undefined);
     }
-  }, [isOpen]);
+  }, [isOpen, reset, nextCommandKQuery, setNextCommandKQuery]);
 
   const recent = recents[0];
   const recentsStatus = useMemo(() => {
@@ -305,124 +374,140 @@ export default function CommandKClient({
     return count ? { count, subhead } : undefined;
   }, [recent, appText]);
 
+  // Years only accessible by search
   const years = useMemo(() =>
-    _years.filter(({ year }) => queryLive && year.includes(queryLive))
-  , [_years, queryLive]);
+    _years.filter(({ year }) => queryFormatted && year.includes(queryFormatted))
+  , [_years, queryFormatted]);
 
   const tags = useMemo(() => {
     const tagsIncludingPrivate = photosCountHidden > 0
       ? addPrivateToTags(_tags, photosCountHidden)
       : _tags;
     return HIDE_TAGS_WITH_ONE_PHOTO
-      ? limitTagsByCount(tagsIncludingPrivate, 2, queryLive)
+      ? limitTagsByCount(tagsIncludingPrivate, 2, queryFormatted)
       : tagsIncludingPrivate;
-  }, [_tags, photosCountHidden, queryLive]);
+  }, [_tags, photosCountHidden, queryFormatted]);
 
-  const categorySections: CommandKSection[] = useMemo(() =>
+  const sectionCategories: CommandKSection[] = useMemo(() =>
     CATEGORY_VISIBILITY
       .map(category => {
+        const heading = getCategoryTitle(category, appText);
         switch (category) {
-        case 'recents': return {
-          heading: appText.category.recentPlural,
-          accessory: <IconRecents size={15} />,
-          items: recentsStatus ? [{
-            label: recentsStatus.subhead,
-            annotation: formatCount(recentsStatus.count),
-            annotationAria: formatCountDescriptive(recentsStatus.count),
-            path: PREFIX_RECENTS,
-          }] : [],
-        };
-        case 'years': return {
-          heading: appText.category.yearPlural,
-          accessory: <IconYear size={14} />,
-          items: years.map(({ year, count }) => ({
-            label: year,
-            annotation: formatCount(count),
-            annotationAria: formatCountDescriptive(count),
-            path: pathForYear(year),
-          })),
-        };
-        case 'cameras': return {
-          heading: appText.category.cameraPlural,
-          accessory: <IconCamera size={14} />,
-          items: cameras.map(({ camera, count }) => ({
-            label: formatCameraText(camera),
-            annotation: formatCount(count),
-            annotationAria: formatCountDescriptive(count),
-            path: pathForCamera(camera),
-          })),
-        };
-        case 'lenses': return {
-          heading: appText.category.lensPlural,
-          accessory: <IconLens size={14} className="translate-y-[0.5px]" />,
-          items: lenses.map(({ lens, count }) => ({
-            label: formatLensText(lens, 'medium'),
-            explicitKey: formatLensText(lens, 'long'),
-            annotation: formatCount(count),
-            annotationAria: formatCountDescriptive(count),
-            path: pathForLens(lens),
-          })),
-        };
-        case 'tags': return {
-          heading: appText.category.tagPlural,
-          accessory: <IconTag
-            size={13}
-            className="translate-x-[1px] translate-y-[0.75px]"
-          />,
-          items: tags.map(({ tag, count }) => ({
-            explicitKey: formatTag(tag),
-            label: <span className="flex items-center gap-[7px]">
-              {formatTag(tag)}
-              {isTagFavs(tag) &&
-                <IconFavs
-                  size={13}
-                  className="translate-y-[-0.5px]"
-                  highlight
-                />}
-              {isTagPrivate(tag) &&
-                <IconLock
-                  size={12}
-                  className="text-dim translate-y-[-0.5px]"
-                />}
-            </span>,
-            annotation: formatCount(count),
-            annotationAria: formatCountDescriptive(count),
-            path: pathForTag(tag),
-          })),
-        };
-        case 'recipes': return {
-          heading: appText.category.recipePlural,
-          accessory: <IconRecipe
-            size={15}
-            className="translate-x-[-1px]"
-          />,
-          items: recipes.map(({ recipe, count }) => ({
-            label: formatRecipe(recipe),
-            annotation: formatCount(count),
-            annotationAria: formatCountDescriptive(count),
-            path: pathForRecipe(recipe),
-          })),
-        };
-        case 'films': return {
-          heading: appText.category.filmPlural,
-          accessory: <IconFilm size={14} />,
-          items: films.map(({ film, count }) => ({
-            label: labelForFilm(film).medium,
-            annotation: formatCount(count),
-            annotationAria: formatCountDescriptive(count),
-            path: pathForFilm(film),
-          })),
-        };
-        case 'focal-lengths': return {
-          heading: appText.category.focalLengthPlural,
-          accessory: <IconFocalLength className="text-[14px]" />,
-          items: focalLengths.map(({ focal, count }) => ({
-            label: formatFocalLength(focal),
-            annotation: formatCount(count),
-            annotationAria: formatCountDescriptive(count),
-            path: pathForFocalLength(focal),
-          })),
-        };
+          case 'recents': return {
+            heading,
+            accessory: <IconRecents size={15} />,
+            items: recentsStatus ? [{
+              label: recentsStatus.subhead,
+              annotation: formatCount(recentsStatus.count),
+              annotationAria: formatCountDescriptive(recentsStatus.count),
+              path: PREFIX_RECENTS,
+            }] : [],
+          };
+          case 'years': return {
+            heading,
+            accessory: <IconYear size={14} />,
+            items: years.map(({ year, count }) => ({
+              label: year,
+              annotation: formatCount(count),
+              annotationAria: formatCountDescriptive(count),
+              path: pathForYear(year),
+            })),
+          };
+          case 'cameras': return {
+            heading,
+            accessory: <IconCamera size={14} />,
+            items: cameras.map(({ camera, count }) => ({
+              label: formatCameraText(camera),
+              annotation: formatCount(count),
+              annotationAria: formatCountDescriptive(count),
+              path: pathForCamera(camera),
+            })),
+          };
+          case 'lenses': return {
+            heading,
+            accessory: <IconLens size={14} className="translate-y-[0.5px]" />,
+            items: lenses.map(({ lens, count }) => ({
+              label: formatLensText(lens, 'medium'),
+              explicitKey: formatLensText(lens, 'long'),
+              annotation: formatCount(count),
+              annotationAria: formatCountDescriptive(count),
+              path: pathForLens(lens),
+            })),
+          };
+          case 'albums': return {
+            heading,
+            accessory: <IconAlbum size={14} />,
+            items: albums
+              .filter(({ count }) => count > 0)
+              .map(({ album, count }) => ({
+                label: album.title,
+                annotation: formatCount(count),
+                annotationAria: formatCountDescriptive(count),
+                path: pathForAlbum(album),
+              })),
+          };
+          case 'tags': return {
+            heading,
+            accessory: <IconTag
+              size={13}
+              className="translate-x-[1px] translate-y-[0.75px]"
+            />,
+            items: tags.map(({ tag, count }) => ({
+              explicitKey: formatTag(tag),
+              label: <span className="flex items-center gap-[7px]">
+                {formatTag(tag)}
+                {isTagFavs(tag) &&
+                  <IconFavs
+                    size={13}
+                    className="translate-y-[-0.5px]"
+                    highlight
+                  />}
+                {isTagPrivate(tag) &&
+                  <IconLock
+                    size={12}
+                    className="text-dim translate-y-[-0.5px]"
+                  />}
+              </span>,
+              annotation: formatCount(count),
+              annotationAria: formatCountDescriptive(count),
+              path: pathForTag(tag),
+              // "Private" is the label; photos are stored as hidden
+              ...isTagPrivate(tag) && { keywords: ['hidden'] },
+            })),
+          };
+          case 'recipes': return {
+            heading,
+            accessory: <IconRecipe
+              size={15}
+              className="translate-x-[-1px]"
+            />,
+            items: recipes.map(({ recipe, count }) => ({
+              label: formatRecipe(recipe),
+              annotation: formatCount(count),
+              annotationAria: formatCountDescriptive(count),
+              path: pathForRecipe(recipe),
+            })),
+          };
+          case 'films': return {
+            heading,
+            accessory: <IconFilm size={14} />,
+            items: films.map(({ film, count }) => ({
+              label: labelForFilm(film).medium,
+              annotation: formatCount(count),
+              annotationAria: formatCountDescriptive(count),
+              path: pathForFilm(film),
+            })),
+          };
+          case 'focal-lengths': return {
+            heading,
+            accessory: <IconFocalLength className="text-[14px]" />,
+            items: focalLengths.map(({ focal, count }) => ({
+              label: formatFocalLength(focal),
+              annotation: formatCount(count),
+              annotationAria: formatCountDescriptive(count),
+              path: pathForFocalLength(focal),
+            })),
+          };
         }
       })
       .filter(Boolean) as CommandKSection[]
@@ -432,13 +517,14 @@ export default function CommandKClient({
     years,
     cameras,
     lenses,
+    albums,
     tags,
     recipes,
     films,
     focalLengths,
   ]);
 
-  const clientSections: CommandKSection[] = [{
+  const sectionTheme: CommandKSection[] = [{
     heading: appText.theme.theme,
     accessory: <IoInvertModeSharp
       size={14}
@@ -459,8 +545,10 @@ export default function CommandKClient({
     }],
   }];
 
+  const sectionDebugTools = [] as CommandKSection[];
+
   if (isUserSignedIn && areAdminDebugToolsEnabled) {
-    clientSections.push({
+    sectionDebugTools.push({
       heading: 'Debug Tools',
       accessory: <RiToolsFill size={16} className="translate-x-[-1px]" />,
       items: [
@@ -503,11 +591,56 @@ export default function CommandKClient({
     });
   }
 
+  const sortItems = [{
+    label: descendingLabel,
+    path: pathDescending,
+    annotation: renderCheck(!isAscending),
+  }, {
+    label: ascendingLabel,
+    path: pathAscending,
+    annotation: renderCheck(isAscending),
+  }, {
+    label: appText.sort.byTakenAt,
+    path: pathTakenAt,
+    annotation: renderCheck(isTakenAt),
+  }, {
+    label: appText.sort.byUploadedAt,
+    path: pathUploadedAt,
+    annotation: renderCheck(isUploadedAt),
+  }];
+
+  if (COLOR_SORT_ENABLED) {
+    sortItems.push({
+      label: appText.sort.byColor,
+      path: pathColor,
+      annotation: renderCheck(isColor),
+    });
+  }
+
+  if (!isSortedByDefault) {
+    sortItems.push({
+      label: appText.sort.clearSort,
+      path: pathClearSort,
+      annotation: <CgClose />,
+    });
+  }
+
+  const sectionSort: CommandKSection = {
+    heading: appText.sort.sort,
+    accessory: <IconSort size={14} className="translate-x-[0.5px]" />,
+    items: doesPathOfferSort && !isInEmptyState
+      ? sortItems
+      : [],
+  };
+
   const pageFull: CommandKItem = {
     label: GRID_HOMEPAGE_ENABLED
       ? appText.nav.full
       : `${appText.nav.full} (${appText.nav.home})`,
     path: PATH_FULL_INFERRED,
+    annotation: renderCheck(
+      pathname === PATH_FULL_INFERRED || isPathFull(pathname),
+    ),
   };
 
   const pageGrid: CommandKItem = {
@@ -515,20 +648,29 @@ export default function CommandKClient({
       ? `${appText.nav.grid} (${appText.nav.home})`
       : appText.nav.grid,
     path: PATH_GRID_INFERRED,
+    annotation: renderCheck(GRID_HOMEPAGE_ENABLED
+      ? isPathRoot(pathname)
+      : isPathGrid(pathname)),
   };
 
   const pageItems: CommandKItem[] = GRID_HOMEPAGE_ENABLED
     ? [pageGrid, pageFull]
     : [pageFull, pageGrid];
 
+  pageItems.push({
+    label: appText.nav.library,
+    path: PATH_LIBRARY,
+    annotation: renderCheck(isPathLibrary(pathname)),
+  });
+
   const sectionPages: CommandKSection = {
-    heading: 'Pages',
+    heading: appText.cmdk.pages,
     accessory: <CgFileDocument size={14} className="translate-x-[-0.5px]" />,
     items: pageItems,
   };
 
-  const adminSection: CommandKSection = {
-    heading: 'Admin',
+  const sectionAdmin: CommandKSection = {
+    heading: appText.nav.admin,
     accessory: <FaRegUserCircle
       size={13}
       className="translate-x-[-0.5px] translate-y-[0.5px]"
@@ -537,55 +679,82 @@ export default function CommandKClient({
   };
 
   if (isUserSignedIn) {
-    adminSection.items.push({
+    sectionAdmin.items.push({
       label: appText.admin.uploadPhotos,
       annotation: <IconLock narrow />,
       action: startUpload,
     });
     if (uploadsCount) {
-      adminSection.items.push({
+      sectionAdmin.items.push({
         label: `${appText.admin.uploadPlural} (${uploadsCount})`,
         annotation: <IconLock narrow />,
         path: PATH_ADMIN_UPLOADS,
       });
     }
-    adminSection.items.push({
+    sectionAdmin.items.push({
       label: `${appText.admin.managePhotos} (${photosCountTotal})`,
       annotation: <IconLock narrow />,
       path: PATH_ADMIN_PHOTOS,
     });
+    if (albumsCount) {
+      sectionAdmin.items.push({
+        label: `${appText.admin.manageAlbums} (${albumsCount})`,
+        annotation: <IconLock narrow />,
+        path: PATH_ADMIN_ALBUMS,
+      });
+    }
     if (tagsCount) {
-      adminSection.items.push({
+      sectionAdmin.items.push({
         label: `${appText.admin.manageTags} (${tagsCount})`,
         annotation: <IconLock narrow />,
         path: PATH_ADMIN_TAGS,
       });
     }
     if (recipesCount) {
-      adminSection.items.push({
+      sectionAdmin.items.push({
         label: `${appText.admin.manageRecipes} (${recipesCount})`,
         annotation: <IconLock narrow />,
         path: PATH_ADMIN_RECIPES,
       });
     }
-    adminSection.items.push({
-      label: selectedPhotoIds === undefined
-        ? appText.admin.batchEdit
-        : appText.admin.batchExitEdit,
+    sectionAdmin.items.push({
+      label: isSelectingPhotos
+        ? appText.admin.selectPhotosExit
+        : appText.admin.selectPhotos,
       annotation: <IconLock narrow />,
-      path: selectedPhotoIds === undefined
-        ? PATH_GRID_INFERRED
-        : undefined,
-      action: selectedPhotoIds === undefined
-        ? () => setSelectedPhotoIds?.([])
-        : () => setSelectedPhotoIds?.(undefined),
+      // Search by legacy label
+      keywords: ['batch', 'edit'],
+      action: () => {
+        if (!isSelectingPhotos) {
+          startSelectingPhotos?.();
+        } else {
+          stopSelectingPhotos?.();
+        }
+      },
     }, {
+      label: isEditingTitles
+        ? appText.admin.editTitlesExit
+        : appText.admin.editTitles,
+      annotation: <IconLock narrow />,
+      keywords: ['title', 'caption', 'bulk'],
+      action: () => {
+        if (!isEditingTitles) {
+          startEditingTitles?.();
+        } else {
+          stopEditingTitles?.();
+        }
+      },
+    }, {
+      label: appText.admin.clearCache,
+      annotation: <IconLock narrow />,
+      action: clearCache,
+    }, {
+      explicitKey: appText.admin.appInsights,
       label: <span className="flex items-center gap-3">
         {appText.admin.appInsights}
         {insightsIndicatorStatus &&
           <InsightsIndicatorDot />}
       </span>,
-      keywords: ['app insights'],
       annotation: <IconLock narrow />,
       path: PATH_ADMIN_INSIGHTS,
     }, {
@@ -594,7 +763,7 @@ export default function CommandKClient({
       path: PATH_ADMIN_CONFIGURATION,
     });
     if (areAdminDebugToolsEnabled) {
-      adminSection.items.push({
+      sectionAdmin.items.push({
         label: 'Baseline Overview',
         annotation: <BiLockAlt />,
         path: PATH_ADMIN_BASELINE,
@@ -604,14 +773,21 @@ export default function CommandKClient({
         path: PATH_ADMIN_COMPONENTS,
       });
     }
-    adminSection.items.push({
+    if (isAdminAiModelDebugEnabled) {
+      sectionAdmin.items.push({
+        label: 'AI Model Comparison',
+        annotation: <BiLockAlt />,
+        path: PATH_ADMIN_AI_MODELS,
+      });
+    }
+    sectionAdmin.items.push({
       label: appText.auth.signOut,
       action: () => signOutAction()
         .then(clearAuthStateAndRedirectIfNecessary)
         .then(() => setIsOpen?.(false)),
     });
   } else {
-    adminSection.items.push({
+    sectionAdmin.items.push({
       label: appText.auth.signIn,
       path: PATH_SIGN_IN,
     });
@@ -621,13 +797,7 @@ export default function CommandKClient({
     <Command.Dialog
       open={isOpen}
       onOpenChange={setIsOpen}
-      filter={(value, search, keywords) => {
-        const searchFormatted = search.trim().toLocaleLowerCase();
-        return (
-          value.toLocaleLowerCase().includes(searchFormatted) ||
-          keywords?.some(keyword => keyword.includes(searchFormatted))
-        ) ? 1 : 0 ;
-      }}
+      filter={filterCommandK}
       loop
     >
       <Modal
@@ -649,9 +819,22 @@ export default function CommandKClient({
         )}>
           <Command.Input
             ref={refInput}
-            onChangeCapture={(e) => {
-              setQueryLive(e.currentTarget.value);
+            value={query}
+            onValueChange={value => {
+              setQuery(value);
               updateMask();
+            }}
+            onKeyDown={e => {
+              // Meta+Enter skips individual results and shows the whole set
+              if (
+                e.key === 'Enter' &&
+                (e.metaKey || e.ctrlKey) &&
+                !isLoading &&
+                photos.length > 0
+              ) {
+                e.preventDefault();
+                showAllQueryResults();
+              }
             }}
             className={clsx(
               'grow p-0',
@@ -667,20 +850,36 @@ export default function CommandKClient({
             disabled={isPending}
           />
           {isLoading && !isPending
-            ? <span className="mr-1 translate-y-[2px]">
-              <Spinner size={16} />
+            ? <span className="translate-y-[2px]">
+              <Spinner size={16} className="-mr-1" />
             </span>
-            : <span className="max-sm:hidden">
+            : <span>
               <LoaderButton
                 className={clsx(
-                  'h-auto! px-1.5 py-1 -mr-1.5',
-                  'border-medium shadow-none',
+                  'h-auto! py-1 mr-[-9px]',
+                  'px-1',
                   'text-[12px]',
                   'text-gray-400/90 dark:text-gray-700',
                 )}
-                onClick={() => setIsOpen?.(false)}
+                onClick={() => {
+                  if (query) {
+                    setQuery('');
+                    updateMask();
+                  } else {
+                    setIsOpen?.(false);
+                  }
+                }}
               >
-                ESC
+                {query
+                  ? <IoClose size={17} className="text-dim" />
+                  : <>
+                    <span className="sm:hidden">
+                      <IoClose size={17} className="text-dim" />
+                    </span>
+                    <span className="max-sm:hidden mx-0.5">
+                      ESC
+                    </span>
+                  </>}
               </LoaderButton>
             </span>}
         </div>
@@ -696,18 +895,20 @@ export default function CommandKClient({
                 ? appText.cmdk.searching
                 : appText.cmdk.noResults}
             </Command.Empty>
-            {queriedSections
-              .concat(categorySections)
+            {sectionQuery
+              .concat(sectionCategories)
+              .concat(sectionSort)
               .concat(sectionPages)
-              .concat(adminSection)
-              .concat(clientSections)
+              .concat(sectionTheme)
+              .concat(sectionAdmin)
+              .concat(sectionDebugTools)
               .filter(({ items }) => items.length > 0)
               .map(({ heading, accessory, items }) =>
                 <Command.Group
                   key={heading}
                   heading={<div className={clsx(
                     'flex items-center',
-                    'px-2 py-1',
+                    'px-2 pt-1 pb-2',
                     'text-xs font-medium text-dim tracking-wider',
                     isPending && 'opacity-20',
                   )}>
@@ -730,7 +931,15 @@ export default function CommandKClient({
                     path,
                     action,
                   }) => {
-                    const key = `${heading} ${explicitKey ?? label}`;
+                    // Include path so shared titles/
+                    // ReactNode labels stay unique
+                    const key = [
+                      heading,
+                      explicitKey ?? (typeof label === 'string'
+                        ? label
+                        : undefined),
+                      path,
+                    ].filter(Boolean).join(' ');
                     return <CommandKItem
                       key={key}
                       label={label}
@@ -769,7 +978,7 @@ export default function CommandKClient({
                     />;
                   })}
                 </Command.Group>)}
-            {footer && !queryLive &&
+            {footer && !queryFormatted &&
               <div className={clsx(
                 'text-center text-base text-dim pt-1',
                 'pb-2',

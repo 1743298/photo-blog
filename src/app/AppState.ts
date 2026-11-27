@@ -5,12 +5,10 @@ import {
   SetStateAction,
   createContext,
   use,
-  RefObject,
 } from 'react';
 import { AnimationConfig } from '@/components/AnimateItems';
 import { ShareModalProps } from '@/share';
 import { InsightsIndicatorStatus } from '@/admin/insights';
-import { INITIAL_UPLOAD_STATE, UploadState } from '@/admin/upload';
 import { AdminData } from '@/admin/actions';
 import { RecipeProps } from '@/recipe';
 import { getCountsForCategoriesCachedAction } from '@/category/actions';
@@ -18,21 +16,26 @@ import { SWRKey } from '@/swr';
 
 export type AppStateContextType = {
   // CORE
-  previousPathname?: string
-  hasLoaded?: boolean
   hasLoadedWithAnimations?: boolean
-  invalidateSwr?: (key?: SWRKey, revalidate?: boolean) => void
+  invalidateSwr?: (args?: { key?: SWRKey, revalidate?: boolean }) => void
   nextPhotoAnimation?: AnimationConfig
   setNextPhotoAnimation?: (animationConfig?: AnimationConfig) => void
   getNextPhotoAnimationId?: () => string
   clearNextPhotoAnimation?: (id?: string) => void
   shouldRespondToKeyboardCommands?: boolean
   setShouldRespondToKeyboardCommands?: Dispatch<SetStateAction<boolean>>
-  categoriesWithCounts?:
-    Awaited<ReturnType<typeof getCountsForCategoriesCachedAction>>
+  categoriesWithCounts?: Awaited<ReturnType<
+    typeof getCountsForCategoriesCachedAction
+  >>
+  // ENVIRONMENT
+  timezone?: string
+  supportsHover?: boolean
   // MODAL
   isCommandKOpen?: boolean
   setIsCommandKOpen?: Dispatch<SetStateAction<boolean>>
+  // Seeds the search field the next time the command menu opens
+  nextCommandKQuery?: string
+  setNextCommandKQuery?: Dispatch<SetStateAction<string | undefined>>
   shareModalProps?: ShareModalProps
   setShareModalProps?: Dispatch<SetStateAction<ShareModalProps | undefined>>
   recipeModalProps?: RecipeProps
@@ -52,19 +55,13 @@ export type AppStateContextType = {
   isLoadingAdminData?: boolean
   refreshAdminData?: () => void
   updateAdminData?: (updatedData: Partial<AdminData>) => void
-  selectedPhotoIds?: string[]
-  setSelectedPhotoIds?: Dispatch<SetStateAction<string[] | undefined>>
-  isPerformingSelectEdit?: boolean
-  setIsPerformingSelectEdit?: Dispatch<SetStateAction<boolean>>
   insightsIndicatorStatus?: InsightsIndicatorStatus
-  // UPLOAD
-  startUpload?: () => Promise<boolean>
-  uploadInputRef?: RefObject<HTMLInputElement | null>
-  uploadState: UploadState
-  setUploadState?: (uploadState: Partial<UploadState>) => void
-  resetUploadState?: () => void
+  // VIEW
+  isPhotoSetFull?: boolean
+  setIsPhotoSetFull?: Dispatch<SetStateAction<boolean>>
   // DEBUG
   areAdminDebugToolsEnabled?: boolean
+  isAdminAiModelDebugEnabled?: boolean
   isGridHighDensity?: boolean
   setIsGridHighDensity?: Dispatch<SetStateAction<boolean>>
   areZoomControlsShown?: boolean
@@ -79,10 +76,8 @@ export type AppStateContextType = {
   setShouldDebugInsights?: Dispatch<SetStateAction<boolean>>
   shouldDebugRecipeOverlays?: boolean
   setShouldDebugRecipeOverlays?: Dispatch<SetStateAction<boolean>>
-} & Partial<AdminData>
+} & Partial<AdminData>;
 
-export const AppStateContext = createContext<AppStateContextType>({
-  uploadState: INITIAL_UPLOAD_STATE,
-});
+export const AppStateContext = createContext<AppStateContextType>({});
 
 export const useAppState = () => use(AppStateContext);

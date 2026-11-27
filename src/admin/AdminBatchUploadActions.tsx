@@ -11,13 +11,13 @@ import {
   generateLocalPostgresString,
 } from '@/utility/date';
 import sleep from '@/utility/sleep';
-import { readStreamableValue } from 'ai/rsc';
+import { readStreamableValue } from '@ai-sdk/rsc';
 import { useRouter } from 'next/navigation';
 import { Dispatch, SetStateAction, useRef, useState } from 'react';
 import { BiCheckCircle } from 'react-icons/bi';
 import ProgressButton from '@/components/primitives/ProgressButton';
 import { UrlAddStatus } from './AdminUploadsClient';
-import PhotoTagFieldset from './PhotoTagFieldset';
+import FieldsetTag from '../tag/FieldsetTag';
 import DeleteUploadButton from './DeleteUploadButton';
 import { useAppState } from '@/app/AppState';
 import { pluralize } from '@/utility/string';
@@ -25,12 +25,15 @@ import FieldsetFavs from '@/photo/form/FieldsetFavs';
 import IconAddUpload from '@/components/icons/IconAddUpload';
 import { PhotoFormData } from '@/photo/form';
 import FieldsetVisibility from '@/photo/visibility/FieldsetVisibility';
+import { Albums } from '@/album';
+import FieldsetAlbum from '@/album/FieldsetAlbum';
 
 const UPLOAD_BATCH_SIZE = 2;
 
 export default function AdminBatchUploadActions({
   uploadUrls,
   uploadTitles,
+  uniqueAlbums,
   uniqueTags,
   isAdding,
   setIsAdding,
@@ -41,6 +44,7 @@ export default function AdminBatchUploadActions({
 }: {
   uploadUrls: string[]
   uploadTitles: string[]
+  uniqueAlbums: Albums
   uniqueTags?: Tags
   isAdding: boolean
   setIsAdding: Dispatch<SetStateAction<boolean>>
@@ -54,6 +58,7 @@ export default function AdminBatchUploadActions({
   const [showBulkSettings, setShowBulkSettings] = useState(false);
   const [tagErrorMessage, setTagErrorMessage] = useState('');
   const [formData, setFormData] = useState<Partial<PhotoFormData>>({});
+  const [albumTitles, setAlbumTitles] = useState<string>();
 
   const [buttonText, setButtonText] = useState('Add All Uploads');
   const [actionErrorMessage, setActionErrorMessage] = useState('');
@@ -74,6 +79,7 @@ export default function AdminBatchUploadActions({
         uploadUrls: urls,
         uploadTitles: titles,
         ...showBulkSettings && {
+          albumTitles: albumTitles?.split(','),
           tags,
           favorite,
           excludeFromFeeds,
@@ -128,7 +134,7 @@ export default function AdminBatchUploadActions({
     <>
       {actionErrorMessage &&
         <ErrorNote>{actionErrorMessage}</ErrorNote>}
-      <Container padding="tight" className="p-2! sm:p-3!">
+      <Container padding="tight" className="p-2! sm:p-3! relative z-10">
         <div className="w-full space-y-4">
           <div className="flex">
             <div className="grow text-main">
@@ -146,7 +152,14 @@ export default function AdminBatchUploadActions({
           </div>
           {showBulkSettings && !actionErrorMessage &&
             <div className="space-y-4 mb-6">
-              <PhotoTagFieldset
+              <FieldsetAlbum
+                albumOptions={uniqueAlbums}
+                value={albumTitles ?? ''}
+                onChange={albums => setAlbumTitles(albums)}
+                readOnly={isAdding}
+                className="relative z-11"
+              />
+              <FieldsetTag
                 label="Tags"
                 tags={formData.tags ?? ''}
                 tagOptions={uniqueTags}
@@ -184,7 +197,7 @@ export default function AdminBatchUploadActions({
                 : <IconAddUpload />
               }
               onClick={async () => {
-                // eslint-disable-next-line max-len
+                // eslint-disable-next-line @stylistic/max-len
                 if (confirm(`Are you sure you want to add all ${uploadUrls.length} uploads?`)) {
                   setIsAdding(true);
                   setUrlAddStatuses(current => current.map((url, index) => ({
@@ -230,14 +243,12 @@ export default function AdminBatchUploadActions({
               onDelete={async didFail => {
                 if (!didFail) {
                   updateAdminData?.({ uploadsCount: 0 });
+                  setUrlAddStatuses([]);
                   await onBatchActionComplete?.();
-                  router.push(PATH_ADMIN_PHOTOS);
-                } else {
-                  setIsDeleting(false);
                 }
+                setIsDeleting(false);
               }}
               className="w-full flex justify-center"
-              shouldRedirectToAdminPhotos
               hideText="never"
               disabled={isAdding}
             >

@@ -4,7 +4,7 @@ import { clsx } from 'clsx/lite';
 import AppGrid from '../components/AppGrid';
 import ThemeSwitcher from '@/app/ThemeSwitcher';
 import Link from 'next/link';
-import { SHOW_REPO_LINK } from '@/app/config';
+import { SHOW_TEMPLATE_ATTRIBUTION } from '@/app/config';
 import RepoLink from '../components/RepoLink';
 import { usePathname } from 'next/navigation';
 import { PATH_ADMIN_PHOTOS, isPathAdmin, isPathSignIn } from './path';
@@ -39,18 +39,24 @@ export default function Footer() {
           type={!shouldAnimate ? 'none' : 'bottom'}
           distanceOffset={10}
           items={showFooter
-            ? [<div
+            ? [<footer
               key="footer"
               className={clsx(
                 'flex items-center gap-1',
                 'text-dim min-h-10',
               )}>
-              <div className="flex gap-x-3 xs:gap-x-4 grow flex-wrap">
+              <div className={clsx(
+                'flex gap-x-3 xs:gap-x-4 grow flex-wrap',
+                'w-full min-w-0',
+              )}>
                 {userEmail || userEmailEager
                   ? <>
-                    <div className="truncate max-w-full">
+                    <Link
+                      href={PATH_ADMIN_PHOTOS}
+                      className="truncate max-w-full max-sm:hidden"
+                    >
                       {userEmail || userEmailEager}
-                    </div>
+                    </Link>
                     <form action={() => signOutAction()
                       .then(clearAuthStateAndRedirectIfNecessary)}>
                       <SubmitButtonWithStatus styleAs="link">
@@ -60,16 +66,16 @@ export default function Footer() {
                   </>
                   : isCheckingAuth
                     ? <Spinner size={16} className="translate-y-[2px]" />
-                    : SHOW_REPO_LINK
+                    : SHOW_TEMPLATE_ATTRIBUTION
                       ? <RepoLink />
                       : <Link href={PATH_ADMIN_PHOTOS}>
                         {appText.nav.admin}
                       </Link>}
               </div>
-              <div className="flex items-center h-10">
+              <div className="flex items-center h-10 shrink-0">
                 <ThemeSwitcher />
               </div>
-            </div>]
+            </footer>]
             : []}
         />}
     />

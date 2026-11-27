@@ -1,19 +1,29 @@
 import { redirect } from 'next/navigation';
 import {
   getPhotoNoStore,
+  getUniqueCamerasCached,
   getUniqueFilmsCached,
+  getUniqueLensesCached,
   getUniqueRecipesCached,
   getUniqueTagsCached,
 } from '@/photo/cache';
+import {
+  getAlbumTitlesForPhotoCached,
+  getAlbumsWithMetaCached,
+} from '@/album/cache';
 import { PATH_ADMIN } from '@/app/path';
 import PhotoEditPageClient from '@/photo/PhotoEditPageClient';
 import {
-  AI_TEXT_GENERATION_ENABLED,
+  AI_CONTENT_GENERATION_ENABLED,
   BLUR_ENABLED,
+  HAS_LOCATION_SERVICES,
   IS_PREVIEW,
 } from '@/app/config';
 import { blurImageFromUrl, resizeImageFromUrl } from '@/photo/server';
-import { getNextImageUrlForManipulation } from '@/platforms/next-image';
+import {
+  getOptimizedPhotoUrlForManipulation,
+  getStorageUrlsForPhoto,
+} from '@/photo/storage';
 
 export default async function PhotoEditPage({
   params,
@@ -24,42 +34,58 @@ export default async function PhotoEditPage({
 
   const [
     photo,
+    photoAlbumTitles,
+    albums,
     uniqueTags,
     uniqueRecipes,
     uniqueFilms,
+    uniqueCameras,
+    uniqueLenses,
   ] = await Promise.all([
     getPhotoNoStore(photoId, true),
+    getAlbumTitlesForPhotoCached(photoId),
+    getAlbumsWithMetaCached(),
     getUniqueTagsCached(),
     getUniqueRecipesCached(),
     getUniqueFilmsCached(),
+    getUniqueCamerasCached(true),
+    getUniqueLensesCached(true),
   ]);
 
   if (!photo) { redirect(PATH_ADMIN); }
 
-  const hasAiTextGeneration = AI_TEXT_GENERATION_ENABLED;
+  const photoStorageUrls = await getStorageUrlsForPhoto(photo);
+
+  const hasAiContentGeneration = AI_CONTENT_GENERATION_ENABLED;
   
   // Only generate image thumbnails when AI generation is enabled
-  const imageThumbnailBase64 = AI_TEXT_GENERATION_ENABLED
+  const imageThumbnailBase64 = AI_CONTENT_GENERATION_ENABLED
     ? await resizeImageFromUrl(
-      getNextImageUrlForManipulation(photo.url, IS_PREVIEW),
+      getOptimizedPhotoUrlForManipulation(photo.url, IS_PREVIEW),
     )
     : '';
 
   const blurData = BLUR_ENABLED
     ? await blurImageFromUrl(
-      getNextImageUrlForManipulation(photo.url, IS_PREVIEW),
+      getOptimizedPhotoUrlForManipulation(photo.url, IS_PREVIEW),
     )
     : '';
 
   return (
     <PhotoEditPageClient {...{
       photo,
+      photoStorageUrls,
+      photoAlbumTitles,
+      albums,
       uniqueTags,
       uniqueRecipes,
       uniqueFilms,
-      hasAiTextGeneration,
+      uniqueCameras,
+      uniqueLenses,
+      hasAiContentGeneration,
       imageThumbnailBase64,
       blurData,
+      hasLocationServices: HAS_LOCATION_SERVICES,
     }} />
   );
 };

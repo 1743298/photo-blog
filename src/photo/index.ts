@@ -1,14 +1,13 @@
 import { formatFocalLength } from '@/focal';
-import { getNextImageUrlForRequest } from '@/platforms/next-image';
 import { photoHasFilmData } from '@/film';
 import {
-  IS_PREVIEW,
   SHOW_EXIF_DATA,
   SHOW_FILMS,
   SHOW_LENSES,
   SHOW_RECIPES,
 } from '@/app/config';
 import { ABSOLUTE_PATH_HOME_IMAGE } from '@/app/path';
+import { cameraFromPhoto, formatCameraText } from '@/camera';
 import { formatDate, formatDateFromPostgresString } from '@/utility/date';
 import {
   formatAperture,
@@ -20,10 +19,14 @@ import { capitalize, parameterize } from '@/utility/string';
 import camelcaseKeys from 'camelcase-keys';
 import { isBefore } from 'date-fns';
 import type { Metadata } from 'next';
-import { FujifilmRecipe } from '@/platforms/fujifilm/recipe';
-import { FujifilmSimulation } from '@/platforms/fujifilm/simulation';
-import { PhotoSyncStatus, generatePhotoSyncStatus } from './sync';
+import { getFujifilmRecipe, getOmRecipe, parseRecipeData, RecipeData }
+  from '@/recipe/serialization';
+import { PhotoUpdateStatus, generatePhotoUpdateStatus } from './update';
 import { AppTextState } from '@/i18n/state';
+import { PhotoColorData } from './color/client';
+import { Place } from '@/place';
+import { isOmSystemCamera }
+  from '@/platforms/om-system/recipe';
 
 // INFINITE SCROLL: FULL
 export const INFINITE_SCROLL_FULL_INITIAL =
@@ -52,6 +55,8 @@ export const MAX_PHOTO_UPLOAD_SIZE_IN_BYTES = 50_000_000;
 
 // Core EXIF data
 export interface PhotoExif {
+  width?: number
+  height?: number
   aspectRatio: number
   make?: string
   model?: string
@@ -65,10 +70,14 @@ export interface PhotoExif {
   exposureCompensation?: number
   latitude?: number
   longitude?: number
-  film?: FujifilmSimulation
+  film?: string
   recipeData?: string
   takenAt?: string
   takenAtNaive?: string
+  // Photo meta potentially located in EXIF/XMP data
+  title?: string
+  caption?: string
+  tags?: string[]
 }
 
 // Raw db insert
@@ -77,12 +86,14 @@ export interface PhotoDbInsert extends PhotoExif {
   url: string
   extension: string
   blurData?: string
-  title?: string
   caption?: string
   semanticDescription?: string
   tags?: string[]
   recipeTitle?: string
   locationName?: string
+  location?: Place
+  colorData?: string
+  colorSort?: number
   priorityOrder?: number
   excludeFromFeeds?: boolean
   hidden?: boolean
@@ -100,7 +111,8 @@ export interface PhotoDb extends
 }
 
 // Parsed db response
-export interface Photo extends Omit<PhotoDb, 'recipeData'> {
+export interface Photo extends Omit<PhotoDb,
+  'recipeData' | 'colorData'> {
   focalLengthFormatted?: string
   focalLengthIn35MmFormatFormatted?: string
   fNumberFormatted?: string
@@ -109,9 +121,16 @@ export interface Photo extends Omit<PhotoDb, 'recipeData'> {
   exposureCompensationFormatted?: string
   takenAtNaiveFormatted: string
   tags: string[]
-  recipeData?: FujifilmRecipe
-  syncStatus: PhotoSyncStatus
+  recipeData?: RecipeData
+  colorData?: PhotoColorData
+  updateStatus?: PhotoUpdateStatus
 }
+
+const formatPhotoExposureCompensation = (
+  photo: Pick<PhotoExif, 'make' | 'exposureCompensation'>,
+) => formatExposureCompensation(photo.exposureCompensation, {
+  thirdsRoundedToTenths: isOmSystemCamera(photo.make),
+});
 
 export const parsePhotoFromDb = (photoDbRaw: PhotoDb): Photo => {
   const photoDb = camelcaseKeys(
@@ -135,21 +154,20 @@ export const parsePhotoFromDb = (photoDbRaw: PhotoDb): Photo => {
     exposureTimeFormatted:
       formatExposureTime(photoDb.exposureTime),
     exposureCompensationFormatted:
-      formatExposureCompensation(photoDb.exposureCompensation),
+      formatPhotoExposureCompensation(photoDb),
     takenAtNaiveFormatted:
       formatDateFromPostgresString(photoDb.takenAtNaive),
-    recipeData: photoDb.recipeData
-      // Legacy check on escaped, string-based JSON
-      ? typeof photoDb.recipeData === 'string'
-        ? JSON.parse(photoDb.recipeData)
-        : photoDb.recipeData
+    recipeData: parseRecipeData(photoDb.recipeData),
+    colorData: photoDb.colorData
+      ? photoDb.colorData
       : undefined,
-    syncStatus: generatePhotoSyncStatus(photoDb),
+    updateStatus: generatePhotoUpdateStatus(photoDb),
   } as Photo;
 };
 
 export const parseCachedPhotoDates = (photo: Photo) => ({
   ...photo,
+  exposureCompensationFormatted: formatPhotoExposureCompensation(photo),
   takenAt: new Date(photo.takenAt),
   updatedAt: new Date(photo.updatedAt),
   createdAt: new Date(photo.createdAt),
@@ -164,14 +182,8 @@ export const convertPhotoToPhotoDbInsert = (
   ...photo,
   takenAt: photo.takenAt.toISOString(),
   recipeData: JSON.stringify(photo.recipeData),
+  colorData: JSON.stringify(photo.colorData),
 });
-
-export const photoStatsAsString = (photo: Photo) => [
-  photo.model,
-  photo.focalLengthFormatted,
-  photo.fNumberFormatted,
-  photo.isoFormatted,
-].join(' ');
 
 export const descriptionForPhoto = (
   photo: Photo,
@@ -249,7 +261,7 @@ export const photoLabelForCount = (
     : appText.photo.photoPlural;
   return _capitalize
     ? capitalize(label)
-    : label;
+    : label.toLocaleLowerCase();
 };
 
 export const photoQuantityText = (
@@ -268,7 +280,13 @@ export const deleteConfirmationTextForPhoto = (
 ) =>
   appText.admin.deleteConfirm(titleForPhoto(photo));
 
-export type PhotoDateRange = { start: string, end: string };
+export type PhotoDateRangePostgres = { start: string, end: string };
+export type PhotoDateRangeFormatted = {
+  start: string,
+  end: string,
+  description: string,
+  descriptionWithSpaces: string,
+};
 
 export const descriptionForPhotoSet = (
   photos:Photo[] = [],
@@ -276,10 +294,10 @@ export const descriptionForPhotoSet = (
   descriptor?: string,
   dateBased?: boolean,
   explicitCount?: number,
-  explicitDateRange?: PhotoDateRange,
+  explicitDateRange?: PhotoDateRangePostgres,
 ) =>
   dateBased
-    ? dateRangeForPhotos(photos, explicitDateRange)
+    ? formattedDateRangeForPhotos(photos, explicitDateRange)
       .description
       .toLocaleUpperCase()
     : [
@@ -297,10 +315,10 @@ const sortPhotosByDateNonDestructively = (
     ? b.takenAt.getTime() - a.takenAt.getTime()
     : a.takenAt.getTime() - b.takenAt.getTime());
 
-export const dateRangeForPhotos = (
+export const formattedDateRangeForPhotos = (
   photos: Photo[] = [],
-  explicitDateRange?: PhotoDateRange,
-) => {
+  explicitDateRange?: PhotoDateRangePostgres,
+): PhotoDateRangeFormatted => {
   let start = '';
   let end = '';
   let description = '';
@@ -335,7 +353,8 @@ const photoHasLensData = (photo: Photo) =>
   Boolean(photo.lensModel);
 
 const photoHasRecipeData = (photo: Photo) =>
-  Boolean(photo.recipeData);
+  Boolean(getFujifilmRecipe(photo.recipeData) ||
+    (getOmRecipe(photo.recipeData) && photo.recipeTitle));
 
 const photoHasExifData = (photo: Photo) =>
   Boolean(photo.focalLength) ||
@@ -367,22 +386,25 @@ export const shouldShowFilmDataForPhoto = (photo: Photo) =>
 export const shouldShowExifDataForPhoto = (photo: Photo) =>
   SHOW_EXIF_DATA && photoHasExifData(photo);
 
-export const getKeywordsForPhoto = (photo: Photo) =>
-  (photo.caption ?? '').split(' ')
-    .concat((photo.semanticDescription ?? '').split(' '))
-    .filter(Boolean)
-    .map(keyword => keyword.toLocaleLowerCase());
+/** EXIF line used by photo OG images and shared photo hovers. */
+export const ogCaptionForPhoto = (photo: Photo) =>
+  [
+    photo.model
+      ? formatCameraText(cameraFromPhoto(photo), 'short')
+      : undefined,
+    photo.focalLengthFormatted,
+    photo.fNumberFormatted,
+    photo.isoFormatted,
+  ]
+    .join(' ')
+    .trim();
 
-export const isNextImageReadyBasedOnPhotos = async (
-  photos: Photo[],
-): Promise<boolean> =>
-  photos.length > 0 && fetch(getNextImageUrlForRequest({
-    imageUrl: photos[0].url,
-    size: 640,
-    addBypassSecret: IS_PREVIEW,
-  }))
-    .then(response => response.ok)
-    .catch(() => false);
+/** Text fields searched by SQL `ILIKE` on
+ * `title`/`caption`/`semantic_description`. */
+export const getKeywordsForPhoto = (photo: Photo) =>
+  [photo.title, photo.caption, photo.semanticDescription]
+    .filter((keyword): keyword is string => Boolean(keyword))
+    .map(keyword => keyword.toLocaleLowerCase());
 
 export const downloadFileNameForPhoto = (photo: Photo) =>
   photo.title

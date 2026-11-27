@@ -1,8 +1,14 @@
 import { Photo } from '@/photo';
-import { parameterize } from '@/utility/string';
+import type { AnnotatedTag } from '@/photo/form';
+import {
+  MakeModelTextLength,
+  formatCount,
+  formatCountDescriptive,
+  parameterize,
+} from '@/utility/string';
 import { formatAppleLensText, isLensApple } from '../platforms/apple';
 import { MISSING_FIELD } from '@/app/path';
-import { formatGoogleLensText, isLensGoogle } from '../platforms/google';
+import { formatGoogleLensText, isLensGoogle } from '../platforms/google-pixel';
 import { CategoryQueryMeta } from '@/category';
 
 const LENS_PLACEHOLDER: Lens = { make: 'Lens', model: 'Model' };
@@ -89,11 +95,8 @@ export const lensFromPhoto = (
 
 export const formatLensText = (
   lens: Lens,
-  length:
-    'long' |    // Unmodified make and model
-    'medium' |  // Make and model, with modifiers removed
-    'short'     // Model only
-  = 'medium',
+  length: MakeModelTextLength = 'medium',
+  includeFocalLength = true,
 ) => {
   const { make, model: modelRaw } = lens;
 
@@ -105,7 +108,7 @@ export const formatLensText = (
   );
 
   const model = isLensApple(lens)
-    ? formatAppleLensText(modelRaw, length !== 'short')
+    ? formatAppleLensText(modelRaw, length !== 'short', includeFocalLength)
     : isLensGoogle(lens)
       ? formatGoogleLensText(modelRaw, length !== 'short')
       : doesModelStartWithMake
@@ -113,10 +116,36 @@ export const formatLensText = (
         : modelRaw;
 
   switch (length) {
-  case 'long':
-    return make ? `${make} ${model}` : modelRaw;
-  case 'medium':
-  case 'short':
-    return model;
+    case 'long':
+      return make ? `${make} ${modelRaw}` : modelRaw;
+    case 'medium':
+    case 'short':
+      return model;
   }
 };
+
+const convertLensFieldForForm = (
+  lenses: Lenses = [],
+  getValue: (lens: Lens) => string | undefined,
+): AnnotatedTag[] => {
+  const counts = new Map<string, number>();
+  lenses.forEach(({ lens, count }) => {
+    const value = getValue(lens);
+    if (value) {
+      counts.set(value, (counts.get(value) ?? 0) + count);
+    }
+  });
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({
+      value,
+      annotation: formatCount(count),
+      annotationAria: formatCountDescriptive(count),
+    }))
+    .sort((a, b) => a.value.localeCompare(b.value));
+};
+
+export const convertLensMakesForForm = (lenses: Lenses = []) =>
+  convertLensFieldForForm(lenses, ({ make }) => make);
+
+export const convertLensModelsForForm = (lenses: Lenses = []) =>
+  convertLensFieldForForm(lenses, ({ model }) => model);

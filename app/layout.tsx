@@ -3,34 +3,32 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 import { clsx } from 'clsx/lite';
 import {
   BASE_URL,
-  DEFAULT_THEME,
   PRESERVE_ORIGINAL_UPLOADS,
   META_DESCRIPTION,
-  NAV_TITLE,
   META_TITLE,
   HTML_LANG,
-  NAV_CAPTION,
   SITE_FEEDS_ENABLED,
-  ADMIN_DEBUG_TOOLS_ENABLED,
+  PAGE_SCRIPT_URLS,
+  VERCEL_GIT_COMMIT_SHA_SHORT,
+  DEBUG_OUTPUTS_ENABLED,
 } from '@/app/config';
-import AppStateProvider from '@/app/AppStateProvider';
+import StateProviders from '@/app/StateProviders';
 import ToasterWithThemes from '@/toast/ToasterWithThemes';
 import PhotoEscapeHandler from '@/photo/PhotoEscapeHandler';
 import { Metadata } from 'next/types';
-import { ThemeProvider } from 'next-themes';
 import Nav from '@/app/Nav';
 import Footer from '@/app/Footer';
 import CommandK from '@/cmdk/CommandK';
-import SwrConfigClient from '@/swr/SwrConfigClient';
-import AdminBatchEditPanel from '@/admin/AdminBatchEditPanel';
 import ShareModals from '@/share/ShareModals';
 import AdminUploadPanel from '@/admin/upload/AdminUploadPanel';
 import { revalidatePath } from 'next/cache';
 import RecipeModal from '@/recipe/RecipeModal';
 import ThemeColors from '@/app/ThemeColors';
-import AppTextProvider from '@/i18n/state/AppTextProvider';
-import SharedHoverProvider from '@/components/shared-hover/SharedHoverProvider';
 import { PATH_FEED_JSON, PATH_RSS_XML } from '@/app/path';
+import AdminBatchEditPanel from '@/admin/select/AdminBatchEditPanel';
+import AdminEditTitlesPanel from '@/admin/edit-titles/AdminEditTitlesPanel';
+import Script from 'next/script';
+import { LAYOUT_CLASS_SHELL_X } from '@/app/layout-metrics';
 
 import '../tailwind.css';
 
@@ -69,6 +67,11 @@ export const metadata: Metadata = {
     type: 'image/png',
     sizes: '180x180',
   }],
+  ...DEBUG_OUTPUTS_ENABLED && {
+    other: {
+      'build': VERCEL_GIT_COMMIT_SHA_SHORT ?? 'unknown',
+    },
+  },
   ...SITE_FEEDS_ENABLED && {
     alternates: {
       types: {
@@ -90,62 +93,54 @@ export default function RootLayout({
       // Suppress hydration errors due to next-themes behavior
       suppressHydrationWarning
     >
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+      </head>
       <body className={clsx(
         // Center on large screens
         '3xl:flex flex-col items-center',
       )}>
-        <AppStateProvider areAdminDebugToolsEnabled={ADMIN_DEBUG_TOOLS_ENABLED}>
-          <AppTextProvider>
-            <ThemeColors />
-            <ThemeProvider attribute="class" defaultTheme={DEFAULT_THEME}>
-              <SwrConfigClient>
-                <SharedHoverProvider>
-                  <div className={clsx(
-                    'mx-3 mb-3',
-                    'lg:mx-6 lg:mb-6',
-                  )}>
-                    <Nav
-                      navTitle={NAV_TITLE}
-                      navCaption={NAV_CAPTION}
-                    />
-                    <main>
-                      <ShareModals />
-                      <RecipeModal />
-                      <div className={clsx(
-                        'min-h-[16rem] sm:min-h-[30rem]',
-                        'mb-12',
-                        'space-y-5',
-                      )}>
-                        <AdminUploadPanel
-                          shouldResize={!PRESERVE_ORIGINAL_UPLOADS}
-                          onLastUpload={async () => {
-                            'use server';
-                            // Update upload count in admin nav
-                            revalidatePath('/admin', 'layout');
-                          }}
-                        />
-                        <AdminBatchEditPanel
-                          onBatchActionComplete={async () => {
-                            'use server';
-                            // Update upload count in admin nav
-                            revalidatePath('/admin', 'layout');
-                          }}
-                        />
-                        {children}
-                      </div>
-                    </main>
-                    <Footer />
-                  </div>
-                  <CommandK />
-                </SharedHoverProvider>
-              </SwrConfigClient>
-              <Analytics debug={false} />
-              <SpeedInsights debug={false}  />
-              <PhotoEscapeHandler />
-              <ToasterWithThemes />
-            </ThemeProvider>
-          </AppTextProvider>
-        </AppStateProvider>
+        <StateProviders>
+          <ThemeColors />
+          <div className={clsx(
+            // Stretch when body becomes 3xl:flex items-center, otherwise
+            // the page shrink-wraps to content max-width
+            'self-stretch',
+            LAYOUT_CLASS_SHELL_X,
+            'pb-3 lg:pb-6',
+            'min-h-dvh flex flex-col',
+          )}>
+            <Nav />
+            <main className="grow">
+              <ShareModals />
+              <RecipeModal />
+              <div className={clsx(
+                'mb-5',
+                'space-y-5',
+              )}>
+                <AdminUploadPanel
+                  shouldResize={!PRESERVE_ORIGINAL_UPLOADS}
+                />
+                <AdminBatchEditPanel
+                  onBatchActionComplete={async () => {
+                    'use server';
+                    // Update upload count in admin nav
+                    revalidatePath('/admin', 'layout');
+                  }}
+                />
+                <AdminEditTitlesPanel />
+                {children}
+              </div>
+            </main>
+            <Footer />
+          </div>
+          <CommandK />
+          <Analytics debug={false} />
+          <SpeedInsights debug={false} />
+          <PhotoEscapeHandler />
+          <ToasterWithThemes />
+        </StateProviders>
+        {PAGE_SCRIPT_URLS.map(url => <Script key={url} src={url} />)}
       </body>
     </html>
   );
